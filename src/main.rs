@@ -34,10 +34,12 @@ mod input;
 mod locale;
 mod location;
 mod logind_session;
+mod offline_tz;
 mod pipewire;
 mod pulse;
 mod theme;
 mod time;
+mod timezone;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -485,6 +487,37 @@ pub enum Change {
 async fn main() -> zbus::Result<()> {
     env_logger::init();
 
+    // Diagnostic one-shot: resolve and print the geographic timezone, then exit
+    // without claiming the D-Bus name (safe to run beside the live daemon).
+    // Diagnostic: exercise only the offline IP fallback (STUN + embedded table).
+    if std::env::args().any(|arg| arg == "--detect-timezone-offline") {
+        return task::LocalSet::new()
+            .run_until(async {
+                match offline_tz::detect().await {
+                    Some(tz) => println!("source=offline-ip timezone={tz}"),
+                    None => println!(
+                        "offline detection unavailable (no public IP via STUN, or no table entry)"
+                    ),
+                }
+                Ok(())
+            })
+            .await;
+    }
+
+    if std::env::args().any(|arg| arg == "--detect-timezone") {
+        return task::LocalSet::new()
+            .run_until(async {
+                let conn = zbus::Connection::system().await?;
+                let finder = tzf_rs::DefaultFinder::new();
+                match timezone::detect_once(&conn, &finder).await {
+                    Ok(desc) => println!("{desc}"),
+                    Err(err) => println!("detection failed: {err}"),
+                }
+                Ok(())
+            })
+            .await;
+    }
+
     let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
     let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
 
@@ -677,6 +710,10 @@ async fn main() -> zbus::Result<()> {
                     log::error!("Failed to watch for systemd-localed changes: {}", err);
                 }
             });
+
+            // Automatic timezone: keep the system zone aligned with the device's
+            // geographic location while the Settings app is closed.
+            task::spawn_local(timezone::monitor());
 
             let conn_clone = connection.clone();
             task::spawn(async move {

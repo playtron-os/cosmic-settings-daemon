@@ -1,11 +1,14 @@
 [package]
 name = "cosmic-settings-daemon"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 
 [workspace]
 members = ["config", "cosmic-settings-daemon-config", "geonames"]
+# Maintenance-only tool to regenerate data/ip-timezones.bin; not part of the
+# daemon build (run manually — see tools/gen-ip-timezones/).
+exclude = ["tools/gen-ip-timezones"]
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
@@ -46,6 +49,12 @@ futures = "0.3.31"
 ctrlc = { version = "3.5.0", features = ["termination"] }
 xkb-data = "0.2.1"
 geonames = { path = "geonames" }
+# `bundled` carries the embedded timezone-boundary data that DefaultFinder needs;
+# we drop the default `clap` feature (a CLI dep we don't use).
+tzf-rs = { version = "1.3", default-features = false, features = ["bundled"] }
+# HTTPS, used only to learn our own public IP for the offline timezone fallback
+# (src/offline_tz.rs). rustls matches the rest of the tree — no extra TLS stack.
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 log = "0.4.28"
 env_logger = "0.11.8"
 ddc-hi = "0.4.1"

@@ -6,3 +6,15 @@ polkit.addRule(function(action, subject) {
             return polkit.Result.YES;
         }
 });
+
+// Allow the active local session to set the system timezone without a password
+// prompt. Required for automatic timezone (see src/timezone.rs), which calls
+// org.freedesktop.timedate1.SetTimezone non-interactively from the daemon, and
+// also lets the Settings app change the zone without an admin auth dialog.
+polkit.addRule(function(action, subject) {
+    if (action.id == "org.freedesktop.timedate1.set-timezone" &&
+        subject.local &&
+        subject.active) {
+            return polkit.Result.YES;
+        }
+});

@@ -1,0 +1,14 @@
+[package]
+name = "gen-ip-timezones"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# Standalone maintenance tool — excluded from the daemon workspace. Regenerates
+# the compact IP->timezone table embedded by ../../src/offline_tz.rs.
+
+[dependencies]
+# Same timezone-boundary data the daemon uses, so the offline fallback agrees
+# with the GeoClue path.
+tzf-rs = { version = "1.3", default-features = false, features = ["bundled"] }
+flate2 = "1"

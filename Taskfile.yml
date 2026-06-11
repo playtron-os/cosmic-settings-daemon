@@ -1,0 +1,248 @@
+version: "3"
+
+vars:
+  NAME:
+    sh: grep 'name =' Cargo.toml | head -n 1 | cut -d'"' -f2
+  VERSION:
+    sh: grep '^version =' Cargo.toml | head -n 1 | cut -d'"' -f2
+  HOST_OS:
+    sh: uname
+  HOST_ARCH:
+    sh: uname -m
+  TARGET_ARCH:
+    sh: "rustc -vV | sed -n 's/host: //p'"
+  ARCH:
+    sh: echo "{{.TARGET_ARCH}}" | cut -d'-' -f1
+  IMAGE_NAME: "{{.NAME}}-builder"
+  IMAGE_TAG:
+    sh: sha256sum Dockerfile | cut -d' ' -f1
+
+tasks:
+  default:
+    aliases:
+      - help
+    cmds:
+      - go-task --list
+
+  build:debug:
+    desc: Build debug build
+    cmds:
+      - cargo build {{.ARG | default ""}} --target {{.TARGET_ARCH}}
+
+  build:release:
+    desc: Build release build
+    aliases:
+      - build
+    cmds:
+      - cargo build --release --target {{.TARGET_ARCH}}
+
+  build:all:
+    desc: Build release and debug builds
+    deps:
+      - build:debug
+      - build:release
+
+  install:
+    desc: Build (debug) and install the daemon + polkit rule into /usr without an
+      RPM, then restart it via cosmic-session. Fast local-iteration alternative to
+      dist:rpm. On a bootc system run `sudo bootc usr-overlay` first if /usr is
+      read-only (the overlay is transient and reverts on reboot).
+    deps:
+      - build:debug
+    cmds:
+      - sudo install -Dm0755 ./target/{{.TARGET_ARCH}}/debug/{{.NAME}} /usr/bin/{{.NAME}}
+      - sudo install -Dm0644 ./data/polkit-1/rules.d/{{.NAME}}.rules
+        /usr/share/polkit-1/rules.d/{{.NAME}}.rules
+      - sudo install -Dm0644 ./data/system_actions.ron
+        /usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions
+      # Relabel so SELinux enforcing mode doesn't refuse to exec a binary that
+      # inherited this checkout's user_home_t context.
+      - sudo restorecon -R /usr/bin/{{.NAME}} /usr/share/polkit-1 2>/dev/null || true
+      # cosmic-session respawns the daemon once the old instance exits. The
+      # anchored pattern matches only the daemon, not this task's own shell.
+      - pkill -f '^/usr/bin/{{.NAME}}' || true
+      - echo "Installed {{.NAME}}; cosmic-session will restart it"
+
+  run:
+    desc: Run the daemon from the debug build (conflicts with a running instance)
+    deps:
+      - build:debug
+    requires:
+      vars:
+        - name: LOG_LEVEL
+          enum: [trace, debug, info]
+    vars:
+      LOG_LEVEL: '{{.LOG_LEVEL | default "info"}}'
+    env:
+      RUST_LOG: |-
+        {{- if eq .LOG_LEVEL "trace" }}
+        error,cosmic_settings_daemon=trace
+        {{- else if eq .LOG_LEVEL "debug" }}
+        error,cosmic_settings_daemon=debug
+        {{- else }}
+        error,cosmic_settings_daemon=info
+        {{- end }}
+    cmds:
+      - ./target/{{.TARGET_ARCH}}/debug/{{.NAME}} {{.CLI_ARGS}}
+
+  dist:prepare:
+    desc: Prepare the project for packaging
+    deps:
+      - build:release
+    sources:
+      - target/{{.TARGET_ARCH}}/release/{{.NAME}}
+    generates:
+      - .cache/{{.NAME}}/usr/bin/{{.NAME}}
+    cmds:
+      - rm -rf .cache/{{.NAME}}
+      - mkdir -p .cache/{{.NAME}}/usr/bin
+      - install -Dm0755 "target/{{.TARGET_ARCH}}/release/{{.NAME}}" ".cache/{{.NAME}}/usr/bin/{{.NAME}}"
+      - install -Dm0644 "data/system_actions.ron" ".cache/{{.NAME}}/usr/share/cosmic/com.system76.CosmicSettings.Shortcuts/v1/system_actions"
+      - install -Dm0644 "data/polkit-1/rules.d/cosmic-settings-daemon.rules" ".cache/{{.NAME}}/usr/share/polkit-1/rules.d/cosmic-settings-daemon.rules"
+      - install -Dm0644 "LICENSE" ".cache/{{.NAME}}/usr/share/licenses/{{.NAME}}/LICENSE"
+      - mkdir -p dist
+
+  dist:archive:
+    desc: Build a tar archive of the project
+    deps:
+      - dist:prepare
+    sources:
+      - .cache/{{.NAME}}/**/*
+    generates:
+      - dist/{{.NAME}}-{{.ARCH}}.tar.gz
+    cmds:
+      - tar cvfz dist/{{.NAME}}-{{.ARCH}}.tar.gz -C .cache {{.NAME}}
+
+  dist:rpm:
+    desc: Build an RPM package
+    aliases:
+      - rpm
+    deps:
+      - dist:archive
+    sources:
+      - dist/{{.NAME}}-{{.ARCH}}.tar.gz
+      - pkg/rpm/{{.NAME}}.spec
+    generates:
+      - dist/{{.NAME}}-{{.VERSION}}-*.{{.ARCH}}.rpm
+    preconditions:
+      - sh: which rpmbuild
+        msg: "Prerequisite utility 'rpmbuild' is not installed"
+    cmds:
+      - mkdir -p ~/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+      - cp ./pkg/rpm/{{.NAME}}.spec ~/rpmbuild/SPECS
+      - cp dist/{{.NAME}}-{{.ARCH}}.tar.gz ~/rpmbuild/SOURCES/{{.NAME}}.tar.gz
+      - rpmbuild -bb --target {{.ARCH}} --define '_prefix /usr' ~/rpmbuild/SPECS/{{.NAME}}.spec
+      - cp ~/rpmbuild/RPMS/{{.ARCH}}/{{.NAME}}-{{.VERSION}}-*.{{.ARCH}}.rpm dist
+
+  dist:all:
+    desc: Build all supported distributable packages
+    aliases:
+      - dist
+    cmds:
+      - task: dist:archive
+      - task: dist:rpm
+
+  release:
+    desc: Publish a new release
+    preconditions:
+      - sh: which npx
+        msg: "Prerequisite utility 'npx' is not installed"
+    cmds:
+      # The .releaserc.yaml config contains the build commands and publish config
+      - npx semantic-release
+
+  repo:update:
+    desc: "Upload the release to the package repository"
+    vars:
+      BUCKET: playtron-dev2-global-os-public
+      BUCKET_PATH: repos/playtron-app/{{.ARCH}}
+      FILE: "dist/{{.NAME}}-{{.VERSION}}-1.{{.ARCH}}.rpm"
+    preconditions:
+      - sh: ls {{.FILE}}
+        msg: "File to upload does not exist: {{.FILE}}"
+    cmds:
+      - echo "Uploading {{.FILE}} to s3://{{.BUCKET}}/{{.BUCKET_PATH}}/$(basename {{.FILE}})"
+      - aws s3 cp {{.FILE}} s3://{{.BUCKET}}/{{.BUCKET_PATH}}/$(basename "{{.FILE}}")
+
+  test:all:
+    desc: Run all tests
+    aliases:
+      - test
+    cmds:
+      - cargo test -- --show-output
+
+  test:one:
+    desc: Run a single test - E.g. go-task test:one TEST=<test>
+    requires:
+      vars:
+        - TEST
+    cmds:
+      - RUST_BACKTRACE=1 cargo test {{.TEST}} -- --exact --show-output --include-ignored
+
+  clean:
+    desc: Remove build artifacts
+    cmds:
+      - rm -rf target .cache dist builder
+
+  docker:build:
+    desc: Build the container image used for the `docker:run` target
+    preconditions:
+      - sh: which docker
+        msg: "Prerequisite utility 'docker' is not installed"
+    status:
+      - docker images | grep {{.IMAGE_NAME}} | grep {{.IMAGE_TAG}}
+    cmds:
+      - docker build -t {{.IMAGE_NAME}}:{{.IMAGE_TAG}} .
+
+  docker:run:
+    desc: Run tasks inside Docker. E.g. go-task docker:run TARGET=build TARGET_ARCH=x86_64-unknown-linux-gnu
+    aliases:
+      - in-docker
+    deps:
+      - docker:build
+    preconditions:
+      - sh: which docker
+        msg: "Prerequisite utility 'docker' is not installed"
+    vars:
+      UID:
+        sh: id -u
+      GID:
+        sh: id -g
+      PWD:
+        sh: pwd
+      SSH_KEY:
+        sh: echo "${SSH_KEY}"
+    requires:
+      vars:
+        - TARGET
+    cmds:
+      - mkdir -p .cache/home
+      - mkdir -p .cache/var/lib/rpm
+      # A /etc/passwd entry is required so the correct ~/.ssh path is used
+      - echo -e "build:x:{{.UID}}:{{.GID}}::/home/build:/bin/bash" > .cache/passwd
+      # Use the SSH key from the host
+      - |
+        mkdir -p .cache/.ssh
+        {{ if ne .SSH_KEY "" }}
+          echo "{{.SSH_KEY}}" > .cache/.ssh/id_ed25519
+          chmod 600 .cache/.ssh/id_ed25519
+        {{ else }}
+          cp ~/.ssh/* .cache/.ssh
+        {{ end }}
+      - |
+        docker run --rm \
+          -v "{{.PWD}}:{{.PWD}}" \
+          -v "{{.PWD}}/.cache/home:/home/build" \
+          -v "{{.PWD}}/.cache/var/lib/rpm:/var/lib/rpm" \
+          -v "{{.PWD}}/.cache/.ssh:/home/build/.ssh" \
+          -v "{{.PWD}}/.cache/passwd:/etc/passwd" \
+          --workdir "{{.PWD}}" \
+          -e HOME=/home/build \
+          -e CARGO_HOME=/home/build/.cargo \
+          -e BUILD_TYPE=${BUILD_TYPE} \
+          -e PKG_CONFIG_SYSROOT_DIR="/usr/{{.ARCH}}-linux-gnu" \
+          -e CARGO_NET_GIT_FETCH_WITH_CLI=true \
+          -e GIT_SSH_COMMAND="ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" \
+          --user {{.UID}}:{{.GID}} \
+          {{.IMAGE_NAME}}:{{.IMAGE_TAG}} \
+          task {{.TARGET}} ARCH={{.ARCH}} TARGET_ARCH={{.TARGET_ARCH}}
