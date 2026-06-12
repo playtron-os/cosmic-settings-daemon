@@ -39,10 +39,14 @@ plugins:
         - Cargo.lock
         - pkg/rpm/cosmic-settings-daemon.spec
 
-  # Create a GitHub release with RPM assets
+  # Create a GitHub release with RPM assets.
   - - "@semantic-release/github"
     - assets:
         - path: "dist/*x86_64*.rpm"
           label: "RPM (x86_64)"
         - path: "dist/*aarch64*.rpm"
           label: "RPM (aarch64)"
+      successComment: false
+      failComment: false
+      failTitle: false
+      releasedLabels: false
