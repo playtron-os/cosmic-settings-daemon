@@ -16,7 +16,9 @@ RUN apt-get update && apt-get install -y \
   libxkbcommon-dev \
   libxkbcommon-dev:arm64 \
   libssl-dev \
-  libssl-dev:arm64
+  libssl-dev:arm64 \
+  libpulse-dev \
+  libpulse-dev:arm64
 
 RUN apt-get install -y \
   g++-aarch64-linux-gnu \
