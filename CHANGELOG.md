@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.0.0...v1.0.1) (2026-06-12)
+
+
+### Bug Fixes
+
+* prevent post release failing ([d259185](https://github.com/playtron-os/cosmic-settings-daemon/commit/d259185b235f7f05b9b22ebe2f580a2e06b88865))
+
 # 1.0.0 (2026-06-12)
 
 
