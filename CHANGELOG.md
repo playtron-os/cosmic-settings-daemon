@@ -1,3 +1,11 @@
+# [1.1.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.0.1...v1.1.0) (2026-06-26)
+
+
+### Features
+
+* add spotlight and chatpanel actions ([72e5f44](https://github.com/playtron-os/cosmic-settings-daemon/commit/72e5f440625c9ad0353a2137b8e7dc6c37d3eff5))
+* update system_actions to reflect correct actions ([f945e2a](https://github.com/playtron-os/cosmic-settings-daemon/commit/f945e2aa821cb2e9cbc574e7dbd78ecbe28169f5))
+
 ## [1.0.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.0.0...v1.0.1) (2026-06-12)
 
 
