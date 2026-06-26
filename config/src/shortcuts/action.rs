@@ -159,6 +159,8 @@ pub enum System {
     BrightnessDown,
     /// Increases screen brightness
     BrightnessUp,
+    /// Toggles the chat panel
+    ChatPanel,
     /// Toggles display mode
     DisplayToggle,
     /// Opens the home folder in a system default file browser
@@ -191,6 +193,8 @@ pub enum System {
     ScreenReader,
     /// Takes a screenshot
     Screenshot,
+    /// Opens the Spotlight search overlay
+    Spotlight,
     /// Suspend the system
     Suspend,
     /// Opens the system default terminal
