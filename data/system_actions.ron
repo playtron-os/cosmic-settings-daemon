@@ -53,10 +53,10 @@
     VolumeRaise: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon VolumeUp",
     /// Opens the system default web browser
     WebBrowser: "xdg-open http://",
-    /// Opens the (alt+tab) window switcher
-    WindowSwitcher: "cosmic-launcher alt-tab",
-    /// Opens the (alt+shift+tab) window switcher
-    WindowSwitcherPrevious: "cosmic-launcher shift-alt-tab",
+    /// Opens the (alt+tab) window switcher (AgentOS)
+    WindowSwitcher: "agentos-launcher alt-tab",
+    /// Opens the (alt+shift+tab) window switcher (AgentOS)
+    WindowSwitcherPrevious: "agentos-launcher shift-alt-tab",
     /// Opens the workspace overview
     WorkspaceOverview: "cosmic-workspaces",
 }
