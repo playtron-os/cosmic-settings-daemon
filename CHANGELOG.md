@@ -1,3 +1,10 @@
+# [1.3.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.2.0...v1.3.0) (2026-06-27)
+
+
+### Features
+
+* add StartMenu system action ([c900ac4](https://github.com/playtron-os/cosmic-settings-daemon/commit/c900ac4ceec435edacae6d4f25eb56b7c530ebac))
+
 # [1.2.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.1.0...v1.2.0) (2026-06-27)
 
 
