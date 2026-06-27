@@ -5,6 +5,8 @@
     ChatPanel: "agentos-chat-panel --toggle",
     /// Opens the AgentOS Spotlight search overlay
     Spotlight: "agentos-launcher spotlight",
+    /// Opens the AgentOS start menu
+    StartMenu: "agentos-panel start-menu",
     /// Decreases screen brightness
     BrightnessDown: "busctl --user call com.system76.CosmicSettingsDaemon /com/system76/CosmicSettingsDaemon com.system76.CosmicSettingsDaemon DecreaseDisplayBrightness",
     /// Increases screen brightness

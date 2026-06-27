@@ -195,6 +195,8 @@ pub enum System {
     Screenshot,
     /// Opens the Spotlight search overlay
     Spotlight,
+    /// Opens the AgentOS start menu
+    StartMenu,
     /// Suspend the system
     Suspend,
     /// Opens the system default terminal
