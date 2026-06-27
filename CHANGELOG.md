@@ -1,3 +1,10 @@
+# [1.2.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.1.0...v1.2.0) (2026-06-27)
+
+
+### Features
+
+* make window switcher action use agentos-launcher by default ([0f5d9a2](https://github.com/playtron-os/cosmic-settings-daemon/commit/0f5d9a2b46254fb6c90f4e4c39af641d2de8e9de))
+
 # [1.1.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.0.1...v1.1.0) (2026-06-26)
 
 
