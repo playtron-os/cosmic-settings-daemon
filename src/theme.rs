@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use anyhow::bail;
 use chrono::{DateTime, Days, Local};
 use cosmic::{config::CosmicTk, theme::CosmicTheme};
-use cosmic_config::CosmicConfigEntry;
+use cosmic_config::{ConfigGet, ConfigSet, CosmicConfigEntry};
 use cosmic_theme::{Theme, ThemeMode};
 
 use geonames::GeoPosition;
@@ -161,6 +161,22 @@ pub async fn watch_theme(
 
     let light_helper = CosmicTheme::light_config()?;
     let dark_helper = CosmicTheme::dark_config()?;
+
+    // Pin the `is_dark` flag on the light/dark theme palette configs. cosmic-config
+    // does not always persist `is_dark` when a theme is written, so it loads stale:
+    // on a non-GNOME desktop a missing `is_dark` defaults to dark even for the light
+    // theme. That makes xdg-desktop-portal publish the wrong `color-scheme` and other
+    // cosmic apps mis-detect light/dark. The light theme is always light and the dark
+    // theme always dark, so correct the flag when it is missing or wrong. Only write
+    // on an actual change to avoid spurious config-change notifications (`set` always
+    // writes) and any watcher churn.
+    for (helper, expected) in [(&light_helper, false), (&dark_helper, true)] {
+        if helper.get::<bool>("is_dark").ok() != Some(expected) {
+            if let Err(err) = helper.set("is_dark", expected) {
+                log::error!("Failed to pin is_dark={expected} on theme config: {err}");
+            }
+        }
+    }
 
     if tk.apply_theme_global {
         // Write the exports for both themes in case they have changed in the meantime
