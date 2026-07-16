@@ -1,3 +1,10 @@
+## [1.3.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.3.0...v1.3.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* write is_dark values when they dont exist ([47f4af9](https://github.com/playtron-os/cosmic-settings-daemon/commit/47f4af9873deacdf992dba27b024e6b22b5d9931))
+
 # [1.3.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.2.0...v1.3.0) (2026-06-27)
 
 
