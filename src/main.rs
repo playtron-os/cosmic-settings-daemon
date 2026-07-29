@@ -2,44 +2,47 @@
 // SPDX-License-Identifier: GPL-3.0-only
 
 use brightness_device::BrightnessDevice;
-use cosmic_config::{Config as CosmicConfig, ConfigGet};
+use cosmic_config::ConfigGet;
 use futures::lock::Mutex;
 use logind_session::LogindSessionProxy;
-use notify::{EventKind, Watcher, event::ModifyKind};
-use std::sync::atomic::AtomicU64;
+use notify::event::ModifyKind;
+use notify::{EventKind, Watcher};
+use std::collections::{HashMap, HashSet};
+use std::io;
+use std::os::unix::process::CommandExt;
+use std::path::PathBuf;
+use std::process::ExitCode;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
-use std::{
-    collections::{HashMap, HashSet},
-    io,
-    path::PathBuf,
-    sync::{Arc, atomic::Ordering},
-};
 use theme::watch_theme;
-use tokio::{
-    io::{Interest, unix::AsyncFd},
-    sync::RwLock,
-    task,
-};
+use tokio::io::Interest;
+use tokio::io::unix::AsyncFd;
+use tokio::signal::unix::SignalKind;
+use tokio::sync::RwLock;
+use tokio::task;
 use tokio_stream::StreamExt;
-use zbus::{
-    Connection, MatchRule, MessageStream,
-    names::{MemberName, UniqueName, WellKnownName},
-    object_server::SignalEmitter,
-    zvariant::ObjectPath,
-};
+use tracing_subscriber::layer::SubscriberExt;
+use tracing_subscriber::util::SubscriberInitExt;
+use zbus::names::{MemberName, UniqueName, WellKnownName};
+use zbus::object_server::SignalEmitter;
+use zbus::zvariant::ObjectPath;
+use zbus::{Connection, MatchRule, MessageStream};
 mod battery;
 mod brightness_device;
 mod greeter;
-mod input;
 mod locale;
 mod location;
 mod logind_session;
 mod offline_tz;
 mod pipewire;
-mod pulse;
 mod theme;
 mod time;
+<<<<<<< HEAD
 mod timezone;
+=======
+mod wayland;
+>>>>>>> upstream
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -51,11 +54,9 @@ pub static ID_COUNTER: AtomicU64 = AtomicU64::new(0);
 static DBUS_NAME: &str = "com.system76.CosmicSettingsDaemon";
 static DBUS_PATH: &str = "/com/system76/CosmicSettingsDaemon";
 
-const AUDIO_CONFIG: &str = "com.system76.CosmicAudio";
-const AMPLIFICATION_SINK: &str = "amplification_sink";
-// const AMPLIFICATION_SOURCE: &str = "amplification_source";
-
 struct SettingsDaemon {
+    /// Directly access varlink daemon methods within the DBus daemon.
+    varlink_daemon: Arc<tokio::sync::Mutex<cosmic_settings_varlink_server::DaemonInner>>,
     logind_session: Option<LogindSessionProxy<'static>>,
     a11y_session: Option<Mutex<cosmic_dbus_a11y::StatusProxy<'static>>>,
     display_brightness_device: BrightnessDevice,
@@ -65,6 +66,7 @@ struct SettingsDaemon {
     watched_states: Arc<
         RwLock<HashMap<(String, u64), (Connection, ObjectPath<'static>, WellKnownName<'static>)>>,
     >,
+    wayland_sender: calloop::channel::Sender<wayland::Cmd>,
 }
 
 #[derive(Debug)]
@@ -186,21 +188,19 @@ impl SettingsDaemon {
 
     /// Take the current xkb config and switch the active input source.
     async fn input_source_switch(&self) {
-        if let Err(why) = input::source_switch() {
-            log::error!("error switching xkb input source: {why}");
-        }
+        let _ = self.wayland_sender.send(wayland::Cmd::InputSourceSwitch);
     }
 
     #[zbus(property)]
     async fn max_display_brightness(&self) -> i32 {
-        self.display_brightness_device.max_brightness() as i32
+        self.display_brightness_device.max_brightness()
     }
 
     #[zbus(property)]
     async fn set_display_brightness(&self, value: i32) {
         if let Some(logind_session) = self.logind_session.as_ref() {
             // Align with slider behavior and device clamp: floor at 1 for backlight
-            let max = self.display_brightness_device.max_brightness() as i32;
+            let max = self.display_brightness_device.max_brightness();
             let min = self.display_brightness_device.min_brightness() as i32;
 
             let clamped = value.clamp(min, max);
@@ -263,7 +263,6 @@ impl SettingsDaemon {
                 log::error!(
                     "Failed to toggle screen reader. Could not apply current state. {err:?}"
                 );
-                return;
             }
         } else {
             log::error!("Failed to toggle screen reader.")
@@ -271,40 +270,28 @@ impl SettingsDaemon {
     }
 
     async fn volume_up(&self) {
-        let amplification_enabled = self.get_amplification_sink().await;
-        let limit = if amplification_enabled { "1.5" } else { "1.0" };
-
-        if let Err(e) = self
-            .run_wpctl(&["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+        if let Err(why) = self
+            .varlink_daemon
+            .lock()
+            .await
+            .audio_server
+            .sink_volume_raise()
             .await
         {
-            log::error!("Failed to unmute audio: {}", e);
-        }
-
-        if let Err(e) = self
-            .run_wpctl(&["set-volume", "@DEFAULT_AUDIO_SINK@", "5%+", "-l", limit])
-            .await
-        {
-            log::error!("Failed to increase volume: {}", e);
+            log::error!("Failed to raise volume: {}", why);
         }
     }
 
     async fn volume_down(&self) {
-        let amplification_enabled = self.get_amplification_sink().await;
-        let limit = if amplification_enabled { "1.5" } else { "1.0" };
-
-        if let Err(e) = self
-            .run_wpctl(&["set-mute", "@DEFAULT_AUDIO_SINK@", "0"])
+        if let Err(why) = self
+            .varlink_daemon
+            .lock()
+            .await
+            .audio_server
+            .sink_volume_lower()
             .await
         {
-            log::error!("Failed to unmute audio: {}", e);
-        }
-
-        if let Err(e) = self
-            .run_wpctl(&["set-volume", "@DEFAULT_AUDIO_SINK@", "5%-", "-l", limit])
-            .await
-        {
-            log::error!("Failed to decrease volume: {}", e);
+            log::error!("Failed to lower volume: {}", why);
         }
     }
 
@@ -327,32 +314,6 @@ impl SettingsDaemon {
 }
 
 impl SettingsDaemon {
-    async fn run_wpctl(&self, args: &[&str]) -> Result<(), std::io::Error> {
-        let output = tokio::process::Command::new("wpctl")
-            .args(args)
-            .output()
-            .await?;
-
-        if output.status.success() {
-            Ok(())
-        } else {
-            Err(std::io::Error::new(
-                std::io::ErrorKind::Other,
-                String::from_utf8_lossy(&output.stderr),
-            ))
-        }
-    }
-
-    async fn get_amplification_sink(&self) -> bool {
-        match CosmicConfig::new(AUDIO_CONFIG, 1) {
-            Ok(config) => config.get::<bool>(AMPLIFICATION_SINK).unwrap_or(true),
-            Err(e) => {
-                log::debug!("Failed to read audio amplification config: {}", e);
-                true
-            }
-        }
-    }
-
     async fn watch_config_inner(
         &mut self,
         config: Config,
@@ -413,7 +374,7 @@ async fn choose_best_backlight(udev_devices: &HashMap<PathBuf, udev::Device>) ->
         }
     }
 
-    best_backlight.unwrap_or_else(|| BrightnessDevice::external())
+    best_backlight.unwrap_or_else(BrightnessDevice::external)
 }
 
 async fn backlight_monitor_task(
@@ -484,9 +445,13 @@ pub enum Change {
 }
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> zbus::Result<()> {
-    env_logger::init();
+async fn main() -> ExitCode {
+    let restart_signal = Arc::new(AtomicBool::new(false));
+    let current_exe = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.canonicalize().ok());
 
+<<<<<<< HEAD
     // Diagnostic one-shot: resolve and print the geographic timezone, then exit
     // without claiming the D-Bus name (safe to run beside the live daemon).
     // Diagnostic: exercise only the offline IP fallback (STUN + embedded table).
@@ -520,18 +485,60 @@ async fn main() -> zbus::Result<()> {
 
     let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
     let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
+=======
+    let signal_term_fut = std::pin::pin!({
+        let restart_signal = Arc::clone(&restart_signal);
+        let sigint = tokio::signal::unix::signal(SignalKind::interrupt()).ok();
+        let sigterm = tokio::signal::unix::signal(SignalKind::terminate()).ok();
+        let sighup = tokio::signal::unix::signal(SignalKind::hangup()).ok();
+        async move {
+            let Some(((mut sigint, mut sigterm), mut sighup)) = sigint.zip(sigterm).zip(sighup)
+            else {
+                return futures::future::pending().await;
+            };
+>>>>>>> upstream
 
-    ctrlc::set_handler(move || {
-        sigterm_tx.send(()).unwrap();
-    })
-    .expect("Error setting sigterm handler");
+            tokio::select! {
+                _ = sigint.recv() => {}
+                _ = sigterm.recv() => {}
+                _ = sighup.recv() => {
+                    restart_signal.store(true, Ordering::Relaxed);
+                }
+            }
+        }
+    });
+
+    let log_format = tracing_subscriber::fmt::format()
+        .pretty()
+        .without_time()
+        .with_line_number(true)
+        .with_file(true)
+        .with_target(false)
+        .with_thread_names(true);
+
+    let log_layer = tracing_subscriber::fmt::Layer::default()
+        .with_writer(std::io::stderr)
+        .event_format(log_format);
+
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_env("RUST_LOG"))
+        .with(log_layer)
+        .init();
 
     if let Err(err) = greeter::sync_with_greeter() {
         log::error!("Failed to sync with greeter. {err:?}");
     }
 
-    task::LocalSet::new()
+    let result: zbus::Result<()> = task::LocalSet::new()
         .run_until(async move {
+            let (varlink_daemon, varlink_backend) = cosmic_settings_varlink_server::init().await;
+            let varlink_daemon_context = varlink_daemon.0.clone();
+
+            task::spawn_local(async move {
+                futures::future::select(Box::pin(varlink_daemon.run()), Box::pin(varlink_backend))
+                    .await;
+            });
+
             let backlights = match backlight_enumerate() {
                 Ok(backlights) => backlights,
                 Err(err) => {
@@ -553,7 +560,9 @@ async fn main() -> zbus::Result<()> {
 
             let a11y_session = async {
                 let connection = zbus::Connection::session().await?;
-                cosmic_dbus_a11y::StatusProxy::builder(&connection).build().await
+                cosmic_dbus_a11y::StatusProxy::builder(&connection)
+                    .build()
+                    .await
             }
             .await;
             let xdg_config = dirs::config_dir()
@@ -587,13 +596,11 @@ async fn main() -> zbus::Result<()> {
                                     .and_then(|prefix| path.strip_prefix(prefix).ok())
                                 {
                                     (path, false)
-                                } else if let Some(path) = xdg_state_clone
-                                    .as_ref()
-                                    .and_then(|prefix| path.strip_prefix(prefix).ok())
-                                {
-                                    (path, true)
                                 } else {
-                                    return None;
+                                    let path = xdg_state_clone
+                                        .as_ref()
+                                        .and_then(|prefix| path.strip_prefix(prefix).ok())?;
+                                    (path, true)
                                 };
                                 // really only care about keys
                                 if path.starts_with(".atomicwrite") {
@@ -628,24 +635,26 @@ async fn main() -> zbus::Result<()> {
                 })
                 .expect("Failed to create notify watcher");
 
-            if let Some(xdg_config) = xdg_config {
-                if let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive) {
-                    log::error!("Failed to watch xdg config dir: {}", err);
-                }
+            if let Some(xdg_config) = xdg_config
+                && let Err(err) = watcher.watch(&xdg_config, notify::RecursiveMode::Recursive)
+            {
+                log::error!("Failed to watch xdg config dir: {}", err);
             }
-            if let Some(xdg_state) = xdg_state {
-                if let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive) {
-                    log::error!("Failed to watch xdg state dir: {}", err);
-                }
+            if let Some(xdg_state) = xdg_state
+                && let Err(err) = watcher.watch(&xdg_state, notify::RecursiveMode::Recursive)
+            {
+                log::error!("Failed to watch xdg state dir: {}", err);
             }
             let watched_configs = Arc::new(RwLock::new(HashMap::new()));
             let watched_states = Arc::new(RwLock::new(HashMap::new()));
             let settings_daemon = SettingsDaemon {
+                varlink_daemon: varlink_daemon_context.clone(),
                 logind_session: logind_session.ok(),
                 a11y_session: a11y_session.ok().map(Mutex::new),
                 display_brightness_device,
                 watched_configs: watched_configs.clone(),
                 watched_states: watched_states.clone(),
+                wayland_sender: wayland::run(),
             };
 
             let connection = zbus::connection::Builder::session()?
@@ -663,41 +672,26 @@ async fn main() -> zbus::Result<()> {
 
             let conn_clone = connection.clone();
             task::spawn_local(async move {
-                if let Err(err) = watch_config_message_stream(
-                    conn_clone,
-                    watched_configs,
-                    watched_states,
-                )
-                .await
+                if let Err(err) =
+                    watch_config_message_stream(conn_clone, watched_configs, watched_states).await
                 {
                     log::error!("Failed to watch config message stream: {}", err);
                 }
             });
 
-            let sigterm_rx_clone = sigterm_rx.resubscribe();
-            let (pulse_tx, pulse_rx) = tokio::sync::mpsc::channel(10);
-            task::spawn_local(async move {
-                if let Err(err) = pulse::pulse(sigterm_rx_clone,pulse_rx).await {
-                    log::error!("Pulse task failed: {err:?}");
-                }
-            });
-
             let (theme_tx, mut theme_rx) = tokio::sync::mpsc::channel(10);
-            task::spawn_local(async move {
+            let (theme_cancel_tx, mut theme_cancel_rx) = tokio::sync::mpsc::channel::<()>(1);
+            let theme_watcher_fut = std::pin::pin!(async move {
                 let mut sleep = Duration::from_millis(100);
 
                 loop {
-                    if let Err(err) = watch_theme(
-                        &mut theme_rx,
-                        theme_cleanup_done_tx.clone(),
-                        sigterm_rx.resubscribe(),
-                    )
-                    .await
-                    {
+                    if let Err(err) = watch_theme(&mut theme_rx, &mut theme_cancel_rx).await {
                         log::error!(
                             "Failed to watch theme {err:?}. Will try again in {}s",
                             sleep.as_secs()
                         );
+                    } else {
+                        break;
                     }
                     tokio::time::sleep(sleep).await;
                     sleep = sleep.saturating_mul(2);
@@ -716,7 +710,7 @@ async fn main() -> zbus::Result<()> {
             task::spawn_local(timezone::monitor());
 
             let conn_clone = connection.clone();
-            task::spawn(async move {
+            let main_fut = std::pin::pin!(async move {
                 while let Some(changes) = rx.recv().await {
                     let Ok(settings_daemon) = conn_clone
                         .object_server()
@@ -757,8 +751,24 @@ async fn main() -> zbus::Result<()> {
                                     log::error!("Failed to send xkb layout update: {err:?}");
                                 }
                             } else if id.as_str() == cosmic_settings_daemon_config::NAME {
-                                if let Err(err) = tokio::time::timeout(Duration::from_secs(1), pulse_tx.send(())).await {
-                                    log::error!("Failed to send cosmic_settings_daemon_config update to pulse: {err:?}");
+                                let mut daemon = varlink_daemon_context.lock().await;
+
+                                let mono_sound = daemon
+                                    .audio_server
+                                    .backend
+                                    .model
+                                    .lock()
+                                    .await
+                                    .daemon_config_context
+                                    .get::<bool>("mono_sound");
+
+                                match mono_sound {
+                                    Ok(enabled) => {
+                                        _ = daemon.audio_server.set_mono(enabled).await;
+                                    }
+                                    Err(_) => {
+                                        tracing::warn!("failed to update settings daemon config");
+                                    }
                                 }
                             }
                             let read_guard = settings_daemon.watched_configs.read().await;
@@ -807,11 +817,27 @@ async fn main() -> zbus::Result<()> {
                 }
             });
 
-            _ = theme_cleanup_done_rx.recv().await;
-
+            futures::future::join(theme_watcher_fut, async move {
+                futures::future::select(signal_term_fut, main_fut).await;
+                _ = theme_cancel_tx.send(()).await;
+            })
+            .await;
+            _ = cosmic_theme::Theme::reset_exports();
             Ok(())
         })
-        .await
+        .await;
+
+    ExitCode::from(if restart_signal.load(Ordering::Relaxed) {
+        if let Some(current_exe) = current_exe {
+            _ = std::process::Command::new(current_exe).exec();
+        }
+        1
+    } else if let Err(why) = result {
+        eprintln!("cosmic-settings-daemon failed: {why}");
+        1
+    } else {
+        0
+    })
 }
 
 async fn watch_config_message_stream(

@@ -3,37 +3,50 @@ name = "cosmic-settings-daemon"
 version = "1.3.1"
 edition = "2024"
 license = "GPL-3.0-or-later"
+publish = false
 
 [workspace]
+<<<<<<< HEAD
 members = ["config", "cosmic-settings-daemon-config", "geonames"]
 # Maintenance-only tool to regenerate data/ip-timezones.bin; not part of the
 # daemon build (run manually — see tools/gen-ip-timezones/).
 exclude = ["tools/gen-ip-timezones"]
+=======
+members = [
+    "audio-client",
+    "audio-core",
+    "audio-server",
+    "config",
+    "cosmic-settings-daemon-config",
+    "geonames",
+    "cosmic-pipewire",
+    "varlink-server",
+]
+>>>>>>> upstream
 
 [workspace.dependencies]
 cosmic-config = { git = "https://github.com/pop-os/libcosmic" }
 cosmic-theme = { git = "https://github.com/pop-os/libcosmic" }
 
-# cosmic-config = { path = "../libcosmic/cosmic-config" }
-# cosmic-theme = { path = "../libcosmic/cosmic-theme" }
-
+[workspace.dependencies.zlink]
+version = "0.5"
+default-features = false
+features = ["tokio"]
 
 [dependencies]
-cosmic-settings-pulse-subscription = { git = "https://github.com/pop-os/cosmic-settings", default-features = false }
+acpid_plug = "0.1.2"
 anyhow = "1.0.99"
+chrono = "0.4.42"
+cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
+cosmic-config.workspace = true
+cosmic-dbus-a11y = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+cosmic-settings-audio-server = { path = "./audio-server" }
 cosmic-settings-daemon-config = { path = "./cosmic-settings-daemon-config", features = [
     "greeter",
 ] }
-dirs = "6.0.0"
-notify = "8.2.0"
-tokio = { version = "1.47.1", features = ["macros", "net", "rt"] }
-udev = "0.9.3"
-zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
-tokio-stream = "0.1.17"
-sunrise = "2.1.0"
-cosmic-config.workspace = true
-cosmic-theme.workspace = true
+cosmic-settings-varlink-server = { path = "./varlink-server" }
 cosmic-theme.export = true
+<<<<<<< HEAD
 cosmic-comp-config = { git = "https://github.com/pop-os/cosmic-comp" }
 chrono = "0.4.42"
 libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
@@ -57,11 +70,37 @@ tzf-rs = { version = "1.3", default-features = false, features = ["bundled"] }
 reqwest = { version = "0.12", default-features = false, features = ["rustls-tls"] }
 log = "0.4.28"
 env_logger = "0.11.8"
+=======
+cosmic-theme.workspace = true
+>>>>>>> upstream
 ddc-hi = "0.4.1"
+dirs = "6.0.0"
+futures = "0.3.31"
+futures-util = "0.3.31"
+geonames = { path = "geonames" }
+libcosmic = { git = "https://github.com/pop-os/libcosmic", default-features = false }
+locale1 = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+log = "0.4.28"
+memoize = "0.5.1"
+notify = "8.2.0"
+notify-rust = "4.11.7"
+serde = "1.0.228"
+sunrise = "2.1.0"
+tokio = { version = "1.47.1", features = ["macros", "net", "rt", "signal"] }
+tokio-stream = "0.1.17"
+tracing = "0.1.44"
+tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+udev = "0.9.3"
+upower_dbus = { git = "https://github.com/pop-os/dbus-settings-bindings" }
+walkdir = "2.5.0"
+zbus = { version = "5.11.0", default-features = false, features = ["tokio"] }
+cctk = { package = "cosmic-client-toolkit", git = "https://github.com/pop-os/cosmic-protocols" }
+calloop = "0.14.4"
+calloop-wayland-source = "0.4.1"
 
 # For development and testing purposes
 # [patch.'https://github.com/pop-os/libcosmic']
-# libcosmic = { git = "https://github.com/pop-os/libcosmic//" }
-# iced_futures = { git = "https://github.com/pop-os/libcosmic//" }
-# cosmic-config = { git = "https://github.com/pop-os/libcosmic//" }
-# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//" }
+# libcosmic = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+# iced_futures = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+# cosmic-config = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }
+# cosmic-theme = { git = "https://github.com/pop-os/libcosmic//", branch = "theme-v2" }

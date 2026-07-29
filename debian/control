@@ -6,11 +6,13 @@ Build-Depends:
   debhelper (>= 11),
   debhelper-compat (= 11),
   cargo,
+  libclang-dev,
   libudev-dev,
   libinput-dev,
+  libpipewire-0.3-dev,
+  libspa-0.2-dev,
   libssl-dev,
   libxkbcommon-dev,
-  pulseaudio-utils,
   pkg-config,
 Standards-Version: 4.3.0
 Homepage: https://github.com/pop-os/cosmic-settings-daemon
@@ -20,12 +22,13 @@ Architecture: amd64 arm64
 Depends:
   acpid,
   adw-gtk3,
-  qt5ct,
-  qt6ct,
   pop-sound-theme,
+  pulseaudio-utils,
   ${misc:Depends},
   ${shlibs:Depends}
 Recommends:
   breeze-icon-theme,
   playerctl,
+  qt5ct,
+  qt6ct,
 Description: Cosmic settings daemon
