@@ -113,11 +113,7 @@ impl Binding {
             || self.is_super()
             || self
                 .key
-<<<<<<< HEAD
-                .map_or(false, |key| !is_forbidden_unmodified_keysym(key))
-=======
                 .is_some_and(|key| !is_forbidden_unmodified_keysym(key))
->>>>>>> upstream
     }
 
     /// Check if the key binding is binding directly to Super

@@ -8,14 +8,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
 use chrono::{DateTime, Days, Local};
-<<<<<<< HEAD
-use cosmic::{config::CosmicTk, theme::CosmicTheme};
-use cosmic_config::{ConfigGet, ConfigSet, CosmicConfigEntry};
-=======
 use cosmic::config::CosmicTk;
 use cosmic::theme::CosmicTheme;
-use cosmic_config::CosmicConfigEntry;
->>>>>>> upstream
+use cosmic_config::{ConfigGet, ConfigSet, CosmicConfigEntry};
 use cosmic_theme::{Theme, ThemeMode};
 
 use geonames::GeoPosition;

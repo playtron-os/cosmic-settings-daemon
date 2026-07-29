@@ -38,11 +38,8 @@ mod offline_tz;
 mod pipewire;
 mod theme;
 mod time;
-<<<<<<< HEAD
 mod timezone;
-=======
 mod wayland;
->>>>>>> upstream
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
@@ -451,12 +448,13 @@ async fn main() -> ExitCode {
         .ok()
         .and_then(|p| p.canonicalize().ok());
 
-<<<<<<< HEAD
-    // Diagnostic one-shot: resolve and print the geographic timezone, then exit
-    // without claiming the D-Bus name (safe to run beside the live daemon).
-    // Diagnostic: exercise only the offline IP fallback (STUN + embedded table).
+    // Diagnostic one-shots: resolve and print the geographic timezone, then exit
+    // without claiming the D-Bus name, so they are safe to run beside the live
+    // daemon.
+
+    // Offline path only: public IP via STUN, then the embedded table.
     if std::env::args().any(|arg| arg == "--detect-timezone-offline") {
-        return task::LocalSet::new()
+        task::LocalSet::new()
             .run_until(async {
                 match offline_tz::detect().await {
                     Some(tz) => println!("source=offline-ip timezone={tz}"),
@@ -464,28 +462,36 @@ async fn main() -> ExitCode {
                         "offline detection unavailable (no public IP via STUN, or no table entry)"
                     ),
                 }
-                Ok(())
             })
             .await;
+        return ExitCode::SUCCESS;
     }
 
     if std::env::args().any(|arg| arg == "--detect-timezone") {
         return task::LocalSet::new()
             .run_until(async {
-                let conn = zbus::Connection::system().await?;
+                let conn = match zbus::Connection::system().await {
+                    Ok(conn) => conn,
+                    Err(err) => {
+                        println!("detection failed: {err}");
+                        return ExitCode::FAILURE;
+                    }
+                };
                 let finder = tzf_rs::DefaultFinder::new();
                 match timezone::detect_once(&conn, &finder).await {
-                    Ok(desc) => println!("{desc}"),
-                    Err(err) => println!("detection failed: {err}"),
+                    Ok(desc) => {
+                        println!("{desc}");
+                        ExitCode::SUCCESS
+                    }
+                    Err(err) => {
+                        println!("detection failed: {err}");
+                        ExitCode::FAILURE
+                    }
                 }
-                Ok(())
             })
             .await;
     }
 
-    let (theme_cleanup_done_tx, mut theme_cleanup_done_rx) = tokio::sync::mpsc::channel(1);
-    let (sigterm_tx, sigterm_rx) = tokio::sync::broadcast::channel(1);
-=======
     let signal_term_fut = std::pin::pin!({
         let restart_signal = Arc::clone(&restart_signal);
         let sigint = tokio::signal::unix::signal(SignalKind::interrupt()).ok();
@@ -496,7 +502,6 @@ async fn main() -> ExitCode {
             else {
                 return futures::future::pending().await;
             };
->>>>>>> upstream
 
             tokio::select! {
                 _ = sigint.recv() => {}
