@@ -1,3 +1,69 @@
+# [1.4.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.3.1...v1.4.0) (2026-07-29)
+
+
+### Bug Fixes
+
+* **audio-backend:** adjust profile priority 1/2 ([97f3e75](https://github.com/playtron-os/cosmic-settings-daemon/commit/97f3e758010f17d8bf02910399c1bb1aef9660c7))
+* **audio-backend:** adjust profile priority 2/2 ([65d4616](https://github.com/playtron-os/cosmic-settings-daemon/commit/65d4616279991cab02be8e4a24bfcbd133912527))
+* **audio-backend:** avoid node volume overwrite if set before node was available ([e60ea40](https://github.com/playtron-os/cosmic-settings-daemon/commit/e60ea405fd6a06c682d0822e2000a752afa4cfad))
+* **audio-backend:** on default node set, check before assuming a node is a source ([3b5ef44](https://github.com/playtron-os/cosmic-settings-daemon/commit/3b5ef4432b44114b1d940d05f0317f1243e7d561))
+* **audio-server:** active profile messages not being emitted ([9d5167a](https://github.com/playtron-os/cosmic-settings-daemon/commit/9d5167abceb3dd518d3632411b0301565626b988))
+* **audio-server:** also consider source routes when detecting headset profiles ([ba9dfdf](https://github.com/playtron-os/cosmic-settings-daemon/commit/ba9dfdf839b8c98c6105941d30ec710217bf4f90))
+* **audio-server:** always emit ActiveRoute signals to fix device names ([bf5b5e4](https://github.com/playtron-os/cosmic-settings-daemon/commit/bf5b5e40c44abfeb61720b39ca8e75520b62e220))
+* **audio-server:** detect when a speaker route changes to a headphone ([0319a6b](https://github.com/playtron-os/cosmic-settings-daemon/commit/0319a6b16ea680b5805faf304253393c903f811a))
+* **audio-server:** disable headset profile detection for bluetooth devices ([51cf44b](https://github.com/playtron-os/cosmic-settings-daemon/commit/51cf44ba2c75b0c56841ba11c2123e3d48543b82))
+* **audio-server:** do not skip headset detection for devices available on startup ([e782308](https://github.com/playtron-os/cosmic-settings-daemon/commit/e782308cf201a7ea90c34d249d6ca2ae01c19019))
+* **audio-server:** ensure headset profile route is a source ([c46a159](https://github.com/playtron-os/cosmic-settings-daemon/commit/c46a15903472482f5871645c1e52cbf39f532e7f))
+* **audio-server:** handle default source/sink event even if name is unchanged ([cc67a7a](https://github.com/playtron-os/cosmic-settings-daemon/commit/cc67a7afc2d36b62715fb93908585c347fbc4f7f))
+* **audio-server:** missing argument to cosmic-osd ([5e84219](https://github.com/playtron-os/cosmic-settings-daemon/commit/5e84219b9ae331302fc3c452f19da9f532773469))
+* **audio-server:** on headset profile set, set route if profile is already active ([e9c15eb](https://github.com/playtron-os/cosmic-settings-daemon/commit/e9c15eb47c4cc39fa9734c8fd1c023b83258cf02))
+* **audio-server:** on setting headphone profile, attempt to active available internal mic route ([09ae5e0](https://github.com/playtron-os/cosmic-settings-daemon/commit/09ae5e0b366b4bebaa07387b868dfecce16450c6))
+* **audio-server:** only show dialog for physical plugs (no bt) ([169d325](https://github.com/playtron-os/cosmic-settings-daemon/commit/169d325c3c42935b4664f8ecea68008b1bfd4a59))
+* **audio-server:** reset headset check when headset route is unplugged ([4a55b8e](https://github.com/playtron-os/cosmic-settings-daemon/commit/4a55b8e15325c466808d9357190623cd2c822a10))
+* **audio-server:** select headset route which has headset port type ([d4a009b](https://github.com/playtron-os/cosmic-settings-daemon/commit/d4a009b08ed4db99effe3c6a2c758eae9a22c1cd))
+* **audio-server:** sync source/sink volume/balance on default node change ([e7936f0](https://github.com/playtron-os/cosmic-settings-daemon/commit/e7936f0d4f01c8c5a436908c7ee9f6ad43e6a7d8))
+* **audio-server:** use port type as fallback for headset detection ([3ccf428](https://github.com/playtron-os/cosmic-settings-daemon/commit/3ccf428129edd50d99f3e82154dd69c22736da1c))
+* **audio-server:** volume set to 0 when a volume property update is empty ([612aa96](https://github.com/playtron-os/cosmic-settings-daemon/commit/612aa9600ad8f8f5a08b9de0f113768284e112ee))
+* **audio:** round volume values to fix volume raise shortcut ([610589e](https://github.com/playtron-os/cosmic-settings-daemon/commit/610589e35ac111c68ea6c05c5f2dd952490a3045))
+* **brightness:** drop cached DDC handles when idle ([21a9692](https://github.com/playtron-os/cosmic-settings-daemon/commit/21a9692b53fcbffa0f18f7d0a12bf0f9d5bd0590)), closes [#165](https://github.com/playtron-os/cosmic-settings-daemon/issues/165)
+* CI dockerfile missing packages ([1ff380b](https://github.com/playtron-os/cosmic-settings-daemon/commit/1ff380bcff96491081b382e75a9c70c556ef31bf))
+* clear routes and profiles on 0 index ([60382a4](https://github.com/playtron-os/cosmic-settings-daemon/commit/60382a4789f16cd3262d2cd4922396ab83c6dd74))
+* **cosmic-pipewire:** check route::device when getting active route by card profile device ([d06c8b7](https://github.com/playtron-os/cosmic-settings-daemon/commit/d06c8b774594c092a0180ee6d180ee968f4f91a5))
+* **cosmic-pipewire:** emit default source/sink event even if name is the same ([8ef1756](https://github.com/playtron-os/cosmic-settings-daemon/commit/8ef1756ffdaf21b51d649906e43dae4dd36d5db2))
+* **cosmic-pipewire:** enumerate profiles after setting a profile ([6c1e69e](https://github.com/playtron-os/cosmic-settings-daemon/commit/6c1e69ed772ab763d56b2bc51b5ce5ea1fc776ac))
+* **cosmic-pipewire:** RemoveDevice message not emitted ([1825703](https://github.com/playtron-os/cosmic-settings-daemon/commit/182570360d97d66273123c3623a0d0d428e3c992))
+* **cosmic-pipewire:** request to enumerate routes after setting route ([9e6c38c](https://github.com/playtron-os/cosmic-settings-daemon/commit/9e6c38cfc3547772ef226917c3bccf64bd2746c3))
+* **cosmic-pipewire:** retry pipewire connection on connection failure ([276fef9](https://github.com/playtron-os/cosmic-settings-daemon/commit/276fef9834b05c57b67e8ba36b74bea1ba690cee))
+* **cosmic-pipewire:** route capacity panic ([5628d59](https://github.com/playtron-os/cosmic-settings-daemon/commit/5628d5932cbf1882a1b80e4e9123a0368c52eab3))
+* dockerfile ([90873b7](https://github.com/playtron-os/cosmic-settings-daemon/commit/90873b796fc9d7dc2446c1e7c350c94fee2096bd))
+* merge conflicts ([24122b3](https://github.com/playtron-os/cosmic-settings-daemon/commit/24122b3b261cb31419d5dde63d656375b880fd98))
+* speaker route after headphone profile apply ([7d58eb9](https://github.com/playtron-os/cosmic-settings-daemon/commit/7d58eb94269e116cb77c9753f7f69a8c6b8fd90f))
+* **theme:** unset flatpak override for QT_QPA_PLATFORMTHEME ([b5e6d82](https://github.com/playtron-os/cosmic-settings-daemon/commit/b5e6d827d5d7f4886864564c450d8ca096fa5167))
+* update iced ([8c54bbb](https://github.com/playtron-os/cosmic-settings-daemon/commit/8c54bbbc10485c31e8717c21e119e19b87eeb3ea))
+
+
+### Features
+
+* **audio-server:** add SetRoute varlink method ([5c223bb](https://github.com/playtron-os/cosmic-settings-daemon/commit/5c223bbc4c26195fa7092ccf2a5f93d15a79a2cb))
+* **audio-server:** pass better arguments to `cosmic-osd confirm-headphones` ([8f96be5](https://github.com/playtron-os/cosmic-settings-daemon/commit/8f96be58583430bbe9f18f56459f08a60ba3c41d))
+* **audio-server:** volume step config ([b039821](https://github.com/playtron-os/cosmic-settings-daemon/commit/b03982175b0a72ebb5285db7094b3bc52ce7a9a8))
+* graceful restart with SIGHUP ([75c0480](https://github.com/playtron-os/cosmic-settings-daemon/commit/75c0480f1315ec96ec3eb216fc939f93f57d7612))
+* impl varlink service w/ audio APIs ([66d880b](https://github.com/playtron-os/cosmic-settings-daemon/commit/66d880bcc940af202ed64c0fa45c040345380c35))
+* update MSRV to Rust 1.93 ([91f41b5](https://github.com/playtron-os/cosmic-settings-daemon/commit/91f41b59ab1cac13c240d9a22cefeb1879c75330))
+* update pipewire/libspa to 0.10.0 ([24ab5c2](https://github.com/playtron-os/cosmic-settings-daemon/commit/24ab5c28eb5876665752cd5e9405b7de17e2b99a))
+* update zlink to 0.5.0 ([ae95aca](https://github.com/playtron-os/cosmic-settings-daemon/commit/ae95acaef0664bc3ae11b39d7f6b01a3fd5df0ee))
+
+
+### Performance Improvements
+
+* **audio:** set device profiles internally with libpipewire ([9681bff](https://github.com/playtron-os/cosmic-settings-daemon/commit/9681bffe17ba16ad75359868811e9441f616cf7f))
+
+
+### Reverts
+
+* Revert "fix(audio-server): detect when a speaker route changes to a headphone" ([2a236f0](https://github.com/playtron-os/cosmic-settings-daemon/commit/2a236f0c13835bf4177b0e3aa921a0c0c6df3035))
+* Revert "fix(audio-server): only show dialog for physical plugs (no bt)" ([64007d1](https://github.com/playtron-os/cosmic-settings-daemon/commit/64007d1164e1d2a554d13c228f0d398260236a43))
+
 ## [1.3.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.3.0...v1.3.1) (2026-07-16)
 
 
