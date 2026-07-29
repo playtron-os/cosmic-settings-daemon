@@ -59,3 +59,11 @@ ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
 ENV PKG_CONFIG_ALLOW_CROSS=1
 ENV PKG_CONFIG_LIBDIR_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig:/usr/share/pkgconfig
 ENV PKG_CONFIG_LIBDIR_x86_64_unknown_linux_gnu=/usr/lib/x86_64-linux-gnu/pkgconfig:/usr/share/pkgconfig
+
+# libspa-sys runs bindgen at build time, so it needs real header paths. The
+# Taskfile's docker:run sets PKG_CONFIG_SYSROOT_DIR=/usr/<arch>-linux-gnu, which
+# makes pkg-config rewrite the libpipewire-0.3/libspa-0.2 -I flags into that
+# cross sysroot — but the :arm64 dev packages are Debian multiarch and install
+# their headers to the native /usr/include, so clang finds nothing there.
+# C_INCLUDE_PATH is read by both gcc and clang and restores the real paths.
+ENV C_INCLUDE_PATH=/usr/include/pipewire-0.3:/usr/include/spa-0.2
