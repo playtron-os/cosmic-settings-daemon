@@ -193,6 +193,8 @@ pub enum System {
     ScreenReader,
     /// Takes a screenshot
     Screenshot,
+    /// Opens the system settings application
+    Settings,
     /// Opens the Spotlight search overlay
     Spotlight,
     /// Opens the AgentOS start menu

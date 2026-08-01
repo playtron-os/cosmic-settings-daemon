@@ -13,16 +13,47 @@ use cctk::wayland_client::{Connection, QueueHandle, delegate_noop};
 use cosmic_comp_config::XkbConfig;
 use cosmic_config::ConfigGet;
 use std::thread;
+use std::time::Duration;
 
 pub enum Cmd {
     InputSourceSwitch,
 }
 
+const CONNECT_ATTEMPTS: u32 = 30;
+const CONNECT_RETRY_DELAY: Duration = Duration::from_secs(2);
+
 pub fn run() -> calloop::channel::Sender<Cmd> {
-    let conn = Connection::connect_to_env().unwrap();
     let (sender, channel) = calloop::channel::channel();
-    thread::spawn(move || thread(conn, channel));
+
+    // Only `Cmd::InputSourceSwitch` needs Wayland; the D-Bus surface (volume,
+    // brightness) does not. Never unwrap here -- a compositor that is merely
+    // slow to start would take the whole daemon down with it.
+    thread::spawn(move || match connect_with_retry() {
+        Some(conn) => thread(conn, channel),
+        None => log::error!(
+            "no Wayland compositor after {CONNECT_ATTEMPTS} attempts; \
+             keyboard layout switching is unavailable for this session"
+        ),
+    });
+
     sender
+}
+
+fn connect_with_retry() -> Option<Connection> {
+    for attempt in 1..=CONNECT_ATTEMPTS {
+        match Connection::connect_to_env() {
+            Ok(conn) => return Some(conn),
+            Err(why) => {
+                log::warn!(
+                    "waiting for a Wayland compositor \
+                     (attempt {attempt}/{CONNECT_ATTEMPTS}): {why}"
+                );
+                thread::sleep(CONNECT_RETRY_DELAY);
+            }
+        }
+    }
+
+    None
 }
 
 const COSMIC_COMP_CONFIG: &str = "com.system76.CosmicComp";
