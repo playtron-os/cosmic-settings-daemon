@@ -41,6 +41,8 @@
     PowerOff: "cosmic-osd shutdown",
     /// Takes a screenshot
     Screenshot: "cosmic-screenshot",
+    /// Opens the system settings application
+    Settings: "agentos-settings",
     /// Suspend the system
     Suspend: "systemctl suspend",
     /// Toggles the screen reader
