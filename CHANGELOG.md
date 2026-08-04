@@ -1,3 +1,10 @@
+## [1.4.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.4.0...v1.4.1) (2026-08-04)
+
+
+### Bug Fixes
+
+* add retry for wayland connection ([5cc6c5e](https://github.com/playtron-os/cosmic-settings-daemon/commit/5cc6c5eb5564e1f1f7526593a43119f88749760a))
+
 # [1.4.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.3.1...v1.4.0) (2026-07-29)
 
 
