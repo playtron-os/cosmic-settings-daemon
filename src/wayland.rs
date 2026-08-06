@@ -132,7 +132,34 @@ impl ProvidesRegistryState for AppData {
         &mut self.registry_state
     }
 
-    sctk::registry_handlers![SeatState,];
+    sctk::registry_handlers![SeatState, SessionConfigHandler,];
+}
+
+/// Binds the session-config global whenever it appears.
+///
+/// The compositor only creates it once a session holds the screen, which happens AFTER this
+/// daemon starts, so binding at startup alone silently never finds it.
+struct SessionConfigHandler;
+
+impl cctk::sctk::registry::RegistryHandler<AppData> for SessionConfigHandler {
+    fn new_global(
+        data: &mut AppData,
+        _conn: &Connection,
+        qh: &QueueHandle<AppData>,
+        name: u32,
+        interface: &str,
+        _version: u32,
+    ) {
+        if interface != "agentos_session_config_v1" || data.session_config.is_some() {
+            return;
+        }
+        let sink = data
+            .registry_state
+            .registry()
+            .bind::<AgentosSessionConfigV1, _, _>(name, 1, qh, ());
+        session_config::push_snapshot(&sink);
+        data.session_config = Some(sink);
+    }
 }
 
 impl SeatHandler for AppData {
@@ -205,21 +232,19 @@ fn thread(conn: Connection, channel: calloop::channel::Channel<Cmd>) {
         })
         .unwrap();
 
-    // Only a persistent compositor offers this, and only to the session holding the screen.
+    // Usually absent at this point -- the compositor creates it only once a session holds the
+    // screen, which is later than this daemon starts. SessionConfigHandler catches that case.
     let session_config = registry_state
         .bind_one::<AgentosSessionConfigV1, _, _>(&qh, 1..=1, ())
         .ok();
     if let Some(sink) = session_config.as_ref() {
         session_config::push_snapshot(sink);
-    } else {
-        log::debug!("session-config: compositor does not offer it; settings stay local");
     }
 
-    // Forward later changes. Held for the thread's lifetime: dropping a watcher stops it.
+    // Watch regardless of whether the global exists yet: pushes are skipped until it does, and
+    // re-running this after the fact would mean tearing the watchers down and back up.
     let (config_tx, config_rx) = calloop::channel::channel();
-    let _watchers = session_config
-        .is_some()
-        .then(|| session_config::watch_domains(config_tx));
+    let _watchers = session_config::watch_domains(config_tx);
     event_loop
         .handle()
         .insert_source(config_rx, |event, _, app_data: &mut AppData| {
