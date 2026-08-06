@@ -36,6 +36,7 @@ mod location;
 mod logind_session;
 mod offline_tz;
 mod pipewire;
+mod session_config;
 mod theme;
 mod time;
 mod timezone;

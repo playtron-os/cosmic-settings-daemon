@@ -1046,6 +1046,8 @@ dependencies = [
  "udev 0.9.3",
  "upower_dbus",
  "walkdir",
+ "wayland-backend",
+ "wayland-scanner",
  "xkb-data",
  "zbus",
 ]
