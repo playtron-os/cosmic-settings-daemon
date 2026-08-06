@@ -1,6 +1,7 @@
 // Copyright 2026 System76 <info@system76.com>
 // SPDX-License-Identifier: GPL-3.0-only
 
+use crate::session_config::{self, AgentosSessionConfigV1};
 use calloop_wayland_source::WaylandSource;
 use cctk::cosmic_protocols::keyboard_layout::v1::client::zcosmic_keyboard_layout_v1::ZcosmicKeyboardLayoutV1;
 use cctk::keyboard_layout::{KeyboardLayoutHandler, KeyboardLayoutState};
@@ -95,6 +96,8 @@ struct AppData {
     running: bool,
     keyboard: Option<Keyboard>,
     current_layout: u32,
+    /// Absent unless this session holds the screen on a persistent compositor.
+    session_config: Option<AgentosSessionConfigV1>,
 }
 
 impl AppData {
@@ -202,6 +205,32 @@ fn thread(conn: Connection, channel: calloop::channel::Channel<Cmd>) {
         })
         .unwrap();
 
+    // Only a persistent compositor offers this, and only to the session holding the screen.
+    let session_config = registry_state
+        .bind_one::<AgentosSessionConfigV1, _, _>(&qh, 1..=1, ())
+        .ok();
+    if let Some(sink) = session_config.as_ref() {
+        session_config::push_snapshot(sink);
+    } else {
+        log::debug!("session-config: compositor does not offer it; settings stay local");
+    }
+
+    // Forward later changes. Held for the thread's lifetime: dropping a watcher stops it.
+    let (config_tx, config_rx) = calloop::channel::channel();
+    let _watchers = session_config
+        .is_some()
+        .then(|| session_config::watch_domains(config_tx));
+    event_loop
+        .handle()
+        .insert_source(config_rx, |event, _, app_data: &mut AppData| {
+            if let calloop::channel::Event::Msg((domain, key)) = event
+                && let Some(sink) = app_data.session_config.as_ref()
+            {
+                session_config::push_key(sink, domain, &key);
+            }
+        })
+        .unwrap();
+
     let mut app_data = AppData {
         seat_state,
         registry_state,
@@ -209,6 +238,7 @@ fn thread(conn: Connection, channel: calloop::channel::Channel<Cmd>) {
         running: true,
         keyboard: None,
         current_layout: 0,
+        session_config,
     };
     while app_data.running {
         event_loop.dispatch(None, &mut app_data).unwrap();
@@ -219,3 +249,5 @@ sctk::delegate_registry!(AppData);
 sctk::delegate_seat!(AppData);
 cctk::delegate_keyboard_layout!(AppData);
 delegate_noop!(AppData: ignore wl_keyboard::WlKeyboard);
+// The compositor never talks back on this one; we only ever send.
+delegate_noop!(AppData: ignore AgentosSessionConfigV1);
