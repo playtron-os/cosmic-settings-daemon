@@ -1,6 +1,5 @@
 use acpid_plug::AcPlugEvents;
 use notify_rust::Notification;
-use std::path::Path;
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::error::TryRecvError;
 use tokio::sync::mpsc::{Receiver, Sender};
@@ -189,7 +188,7 @@ async fn critical_battery_nag(mut watch: Receiver<bool>) {
 fn on_ac_plug(event: acpid_plug::Event, battery_level: BatteryLevel) {
     let (theme, sound) = if matches!(event, acpid_plug::Event::Plugged) {
         ("freedesktop", "power-plug")
-    } else if Path::new("/usr/share/sounds/Pop/").exists()
+    } else if crate::xdg::find("sounds/Pop").is_some()
         && matches!(battery_level, BatteryLevel::Low | BatteryLevel::Critical)
     {
         ("Pop", "power-unplug-battery-low")

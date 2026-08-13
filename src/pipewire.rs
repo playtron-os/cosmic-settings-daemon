@@ -26,15 +26,19 @@ pub fn play_sound(theme: &'static str, sound: &'static str) {
 
 #[memoize::memoize]
 fn sound_path(theme: &'static str, sound: &'static str) -> Option<PathBuf> {
-    let entries = WalkDir::new(["/usr/share/sounds/", theme].concat())
-        .follow_links(true)
-        .into_iter()
-        .filter_map(Result::ok);
+    // Sound themes are shared data: search every XDG data directory rather than
+    // only the FHS one, which does not exist on Nix-style systems.
+    for dir in crate::xdg::search_dirs() {
+        let entries = WalkDir::new(dir.join("sounds").join(theme))
+            .follow_links(true)
+            .into_iter()
+            .filter_map(Result::ok);
 
-    for entry in entries {
-        let path = entry.path();
-        if path.is_file() && path.file_stem().is_some_and(|stem| stem == sound) {
-            return Some(path.to_owned());
+        for entry in entries {
+            let path = entry.path();
+            if path.is_file() && path.file_stem().is_some_and(|stem| stem == sound) {
+                return Some(path.to_owned());
+            }
         }
     }
 

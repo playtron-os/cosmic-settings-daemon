@@ -3,7 +3,6 @@ bindir = $(prefix)/bin
 libdir = $(prefix)/lib
 includedir = $(prefix)/include
 sharedir = $(prefix)/share
-geoclue_agent ?= /usr/libexec/geoclue-2.0/demos/agent
 
 CARGO_TARGET_DIR ?= target
 TARGET = debug

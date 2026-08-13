@@ -3,7 +3,6 @@
 // when the theme is set to auto-export color palette, write to gtk3 / gtk4 / kde / ... css files
 // read config file for lat/long
 
-use std::path::Path;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::bail;
@@ -582,14 +581,10 @@ fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
 }
 
 fn set_gnome_desktop_interface(is_dark: bool) {
-    let (color_scheme, adw_theme, adw_theme_path) = if is_dark {
-        (
-            "prefer-dark",
-            "adw-gtk3-dark",
-            "/usr/share/themes/adw-gtk3-dark",
-        )
+    let (color_scheme, adw_theme) = if is_dark {
+        ("prefer-dark", "adw-gtk3-dark")
     } else {
-        ("prefer-light", "adw-gtk3", "/usr/share/themes/adw-gtk3")
+        ("prefer-light", "adw-gtk3")
     };
 
     tokio::spawn(async {
@@ -604,7 +599,9 @@ fn set_gnome_desktop_interface(is_dark: bool) {
             .await;
     });
 
-    if Path::new(adw_theme_path).exists() {
+    // GTK themes are shared data; look through every XDG data directory instead
+    // of assuming the FHS one exists.
+    if crate::xdg::find(format!("themes/{adw_theme}")).is_some() {
         tokio::spawn(async {
             let _res = tokio::process::Command::new("gsettings")
                 .args(["set", "org.gnome.desktop.interface", "gtk-theme", adw_theme])

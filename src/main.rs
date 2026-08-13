@@ -41,6 +41,7 @@ mod theme;
 mod time;
 mod timezone;
 mod wayland;
+mod xdg;
 
 // Use seperate HasDisplayBrightness, or -1?
 // Is it fair to assume a display device will notify on change?
