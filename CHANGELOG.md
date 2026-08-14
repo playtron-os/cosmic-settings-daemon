@@ -1,3 +1,11 @@
+# [1.5.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.4.1...v1.5.0) (2026-08-14)
+
+
+### Features
+
+* add calculator action ([790396f](https://github.com/playtron-os/cosmic-settings-daemon/commit/790396fbd6fcb5c0369e623d578d6a826b3ecbe9))
+* forward this session's settings to a shared compositor ([fa2260a](https://github.com/playtron-os/cosmic-settings-daemon/commit/fa2260a4db20cc2c33795858a3e4ab2f41e9a1ec))
+
 ## [1.4.1](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.4.0...v1.4.1) (2026-08-04)
 
 
