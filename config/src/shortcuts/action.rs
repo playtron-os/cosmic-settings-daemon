@@ -159,6 +159,8 @@ pub enum System {
     BrightnessDown,
     /// Increases screen brightness
     BrightnessUp,
+    /// Opens the calculator
+    Calculator,
     /// Toggles the chat panel
     ChatPanel,
     /// Toggles display mode
