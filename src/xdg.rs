@@ -12,8 +12,10 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
-/// XDG Base Directory spec default for an unset `XDG_DATA_DIRS`.
-const DEFAULT_DATA_DIRS: &str = "/usr/local/share:/usr/share";
+// The prefix rule and the XDG spec default come from `icetron-paths`, shared across the
+// fleet. The search order stays local; the tests below pin it.
+use icetron_paths::DATA_DIRS_DEFAULT as DEFAULT_DATA_DIRS;
+use icetron_paths::prefix_of as prefix_from_exe;
 
 /// Inputs that data lookup depends on.
 ///
@@ -40,14 +42,6 @@ impl DataEnv {
                 .and_then(|exe| prefix_from_exe(&exe)),
         }
     }
-}
-
-/// `<prefix>/bin/cosmic-settings-daemon` -> `<prefix>`.
-fn prefix_from_exe(exe: &Path) -> Option<PathBuf> {
-    let bin = exe.parent()?;
-    (bin.file_name()? == "bin")
-        .then(|| bin.parent())?
-        .map(Path::to_path_buf)
 }
 
 /// Directories holding shared data, highest priority first.

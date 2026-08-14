@@ -30,6 +30,7 @@ default-features = false
 features = ["tokio"]
 
 [dependencies]
+icetron-paths = { git = "https://github.com/playtron-os/icetron-paths.git", rev = "2c8bf4051a24ae61afa4ed9729e841a8fee709ad" }
 # Pushing this session's settings to a shared compositor (see src/session_config.rs).
 # wayland-client comes from cctk's re-export; the scanner macros need the backend in scope.
 wayland-scanner = "0.31"

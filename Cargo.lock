@@ -1029,6 +1029,7 @@ dependencies = [
  "futures",
  "futures-util",
  "geonames",
+ "icetron-paths",
  "libcosmic",
  "locale1",
  "log",
@@ -2717,6 +2718,11 @@ dependencies = [
  "unicode-segmentation",
  "window_clipboard",
 ]
+
+[[package]]
+name = "icetron-paths"
+version = "0.1.0"
+source = "git+https://github.com/playtron-os/icetron-paths.git?rev=2c8bf4051a24ae61afa4ed9729e841a8fee709ad#2c8bf4051a24ae61afa4ed9729e841a8fee709ad"
 
 [[package]]
 name = "icu_collections"
