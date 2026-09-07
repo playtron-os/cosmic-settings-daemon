@@ -71,6 +71,9 @@ pub enum Action {
     /// Change focus to the next output
     NextOutput,
 
+    /// Change to the next workspace — the vertical axis, above desktops
+    NextRealm,
+
     /// Change focus to the next workspace
     NextWorkspace,
 
@@ -80,6 +83,9 @@ pub enum Action {
     #[deprecated]
     /// Change focus to the previous output
     PreviousOutput,
+
+    /// Change to the previous workspace — the vertical axis, above desktops
+    PreviousRealm,
 
     /// Change focus to the previous workspace
     PreviousWorkspace,
