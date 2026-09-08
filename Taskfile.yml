@@ -139,44 +139,6 @@ tasks:
       - rpmbuild -bb --target {{.ARCH}} --define '_prefix /usr' ~/rpmbuild/SPECS/{{.NAME}}.spec
       - cp ~/rpmbuild/RPMS/{{.ARCH}}/{{.NAME}}-{{.VERSION}}-*.{{.ARCH}}.rpm dist
 
-  dist:rpm:kora:
-    desc: >-
-      dist:rpm with /usr/share/sounds/Pop and /usr/share/themes/adw-gtk3 pointed
-      into the store. Neither exists on NixOS, so deploy:nix builds through this.
-    vars:
-      KORA_DIR: '{{.KORA_DIR | default "~/dev/kora-nix-poc"}}'
-    cmds:
-      # Read back out of the release derivation so they cannot drift from it.
-      # A third substitution appearing there fails the count check below.
-      - |
-        set -e
-        kora=$(cd {{.KORA_DIR}} && pwd)
-        subs=$(nix derivation show "path:$kora#{{.NAME}}" |
-          grep -o "'/nix/store/[^']*'" | tr -d "'" | sort -u)
-        n=$(printf '%s\n' "$subs" | grep -c .)
-        if [ "$n" != 2 ]; then
-          echo "error: kora's postPatch yielded $n store paths, expected 2." >&2
-          echo "It has changed - update dist:rpm:kora to match." >&2
-          exit 1
-        fi
-        sounds=$(printf '%s\n' "$subs" | grep -m1 pop-gtk-theme)
-        theme=$(printf '%s\n' "$subs" | grep -m1 adw-gtk3)
-        [ -n "$sounds" ] && [ -n "$theme" ]
-        # Kept aside, not reverted with git, which would take uncommitted work.
-        for file in src/battery.rs src/theme.rs; do cp "$file" "$file.deploy-orig"; done
-        sed -i "s|/usr/share/sounds/Pop/|$sounds|g" src/battery.rs
-        sed -i "s|/usr/share/themes/adw-gtk3|$theme|g" src/theme.rs
-        grep -q "$sounds" src/battery.rs
-        grep -q "$theme" src/theme.rs
-        echo "kora paths: sounds -> $sounds"
-        echo "kora paths: theme  -> $theme"
-      # Runs after dist:rpm below, whether or not it succeeded.
-      - defer: |
-          for file in src/battery.rs src/theme.rs; do
-            [ -e "$file.deploy-orig" ] && mv "$file.deploy-orig" "$file" || true
-          done
-      - task: dist:rpm
-
   dist:all:
     desc: Build all supported distributable packages
     aliases:
@@ -284,13 +246,10 @@ tasks:
           REMOTE_DIR: '{{.REMOTE_DIR}}'
           STAGE: '{{.STAGE}}'
           SHELL_ATTR: '.#deploy'
-          # KORA_DIR rides along because the builder invokes a fresh `task`
-          # inside the dev shell, which inherits no vars from this one.
-          RPM_TARGET: '{{if eq .BUILDER "device"}}dist:rpm:kora KORA_DIR={{.KORA_DIR}}{{else}}dist:rpm{{end}}'
-      # A profile refuses a name it already holds and there is no replace, so
-      # the previous deploy goes first.
+      # By regex: the element is named after the derivation, not the attribute,
+      # and there is no replace - the previous deploy goes first.
       - |
-        ssh {{.HOST}} 'nix profile remove {{.NAME}} >/dev/null 2>&1 || true
+        ssh {{.HOST}} 'nix profile remove --regex "^{{.NAME}}(-.*)?$" >/dev/null 2>&1 || true
           nix profile add --impure --file {{.REMOTE_DIR}}/dev.nix {{.NAME}}'
       # comm truncates to 15 chars - exactly `cosmic-settings`, another binary -
       # so confirm against /proc/<pid>/exe before signalling anything.
@@ -308,12 +267,8 @@ tasks:
         echo "Done. {{.NAME}} is in {{.HOST}}'s user profile."
         echo "cosmic-session resolves it by name and ~/.nix-profile/bin outranks"
         echo "the system closure, so the next session starts this build."
-        echo "Undo it with 'nix profile remove {{.NAME}}' on the device."
-        case "{{.BUILDER}}" in
-          device) ;;
-          *) echo "Note: only BUILDER=device runs dist:rpm:kora, so this build's"
-             echo "/usr/share/{sounds/Pop,themes/adw-gtk3} will not resolve." ;;
-        esac
+        echo "Undo it on the device with:"
+        echo "  nix profile remove --regex '^{{.NAME}}(-.*)?\$'"
 
   deploy:nix:rpm:
     internal: true
