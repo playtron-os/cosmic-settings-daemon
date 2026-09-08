@@ -9,8 +9,12 @@ vars:
     sh: uname
   HOST_ARCH:
     sh: uname -m
+  # Without the fallback, every task on a machine whose Rust lives in a Nix
+  # shell resolves this to nothing and builds paths with a hole in them.
   TARGET_ARCH:
-    sh: "rustc -vV | sed -n 's/host: //p'"
+    sh: >-
+      rustc -vV 2>/dev/null | sed -n 's/host: //p' | grep .
+      || echo "$(uname -m)-unknown-linux-gnu"
   ARCH:
     sh: echo "{{.TARGET_ARCH}}" | cut -d'-' -f1
   IMAGE_NAME: "{{.NAME}}-builder"
@@ -135,6 +139,44 @@ tasks:
       - rpmbuild -bb --target {{.ARCH}} --define '_prefix /usr' ~/rpmbuild/SPECS/{{.NAME}}.spec
       - cp ~/rpmbuild/RPMS/{{.ARCH}}/{{.NAME}}-{{.VERSION}}-*.{{.ARCH}}.rpm dist
 
+  dist:rpm:kora:
+    desc: >-
+      dist:rpm with /usr/share/sounds/Pop and /usr/share/themes/adw-gtk3 pointed
+      into the store. Neither exists on NixOS, so deploy:nix builds through this.
+    vars:
+      KORA_DIR: '{{.KORA_DIR | default "~/dev/kora-nix-poc"}}'
+    cmds:
+      # Read back out of the release derivation so they cannot drift from it.
+      # A third substitution appearing there fails the count check below.
+      - |
+        set -e
+        kora=$(cd {{.KORA_DIR}} && pwd)
+        subs=$(nix derivation show "path:$kora#{{.NAME}}" |
+          grep -o "'/nix/store/[^']*'" | tr -d "'" | sort -u)
+        n=$(printf '%s\n' "$subs" | grep -c .)
+        if [ "$n" != 2 ]; then
+          echo "error: kora's postPatch yielded $n store paths, expected 2." >&2
+          echo "It has changed - update dist:rpm:kora to match." >&2
+          exit 1
+        fi
+        sounds=$(printf '%s\n' "$subs" | grep -m1 pop-gtk-theme)
+        theme=$(printf '%s\n' "$subs" | grep -m1 adw-gtk3)
+        [ -n "$sounds" ] && [ -n "$theme" ]
+        # Kept aside, not reverted with git, which would take uncommitted work.
+        for file in src/battery.rs src/theme.rs; do cp "$file" "$file.deploy-orig"; done
+        sed -i "s|/usr/share/sounds/Pop/|$sounds|g" src/battery.rs
+        sed -i "s|/usr/share/themes/adw-gtk3|$theme|g" src/theme.rs
+        grep -q "$sounds" src/battery.rs
+        grep -q "$theme" src/theme.rs
+        echo "kora paths: sounds -> $sounds"
+        echo "kora paths: theme  -> $theme"
+      # Runs after dist:rpm below, whether or not it succeeded.
+      - defer: |
+          for file in src/battery.rs src/theme.rs; do
+            [ -e "$file.deploy-orig" ] && mv "$file.deploy-orig" "$file" || true
+          done
+      - task: dist:rpm
+
   dist:all:
     desc: Build all supported distributable packages
     aliases:
@@ -191,6 +233,193 @@ tasks:
     cmds:
       - rm -rf target .cache dist builder
 
+  deploy:nix:
+    desc: >-
+      Deploy to a NixOS (Kora) host - build this checkout's RPM, then install it
+      into the device's user profile.
+      E.g. go-task deploy:nix HOST=ericky@192.168.1.220
+    aliases:
+      - deploy:nixos
+    requires:
+      vars:
+        - name: HOST
+    vars:
+      # The checkout /etc/nixos's `kora` flake input points at on the device.
+      KORA_DIR: '{{.KORA_DIR | default "~/dev/kora-nix-poc"}}'
+      # device builds on {{.HOST}} itself, so it links against the glibc it will
+      # run on. nix, container and host build here and are checked against it.
+      BUILDER: '{{.BUILDER | default "device"}}'
+      REMOTE_DIR: /tmp/{{.NAME}}-nix
+      STAGE: .cache/nix
+      # Started once at login and not respawned, so a kill ends it for good.
+      RESTART: '{{.RESTART | default "false"}}'
+    preconditions:
+      - sh: which rsync
+        msg: "Prerequisite utility 'rsync' is not installed"
+      - sh: ssh -o BatchMode=yes -o ConnectTimeout=10 {{.HOST}} true
+        msg: "Cannot reach {{.HOST}} over SSH without a password. Set up key auth first."
+      - sh: ssh {{.HOST}} 'test -e /run/current-system'
+        msg: "{{.HOST}} is not a NixOS host."
+      - sh: ssh {{.HOST}} 'test -d {{.KORA_DIR}}'
+        msg: >-
+          No kora checkout at {{.KORA_DIR}} on {{.HOST}}. Point KORA_DIR at the one
+          /etc/nixos's `kora` flake input uses.
+      # Every builder packages in the dev shell this repo's flake describes.
+      - sh: test -f flake.nix
+        msg: "No flake.nix in this checkout, so there is no dev shell to build in."
+      - sh: '[ "{{.BUILDER}}" != "device" ] || ssh {{.HOST}} "command -v nix git rsync >/dev/null"'
+        msg: >-
+          BUILDER=device builds on {{.HOST}}, which needs nix, git and rsync.
+          Build here instead with BUILDER=nix or BUILDER=container.
+      - sh: '[ "{{.BUILDER}}" != "nix" ] || command -v nix'
+        msg: >-
+          BUILDER=nix needs the 'nix' command on this machine. Drop it to build
+          on {{.HOST}} instead, or use BUILDER=container.
+    cmds:
+      - task: deploy:nix:rpm
+        vars:
+          HOST: '{{.HOST}}'
+          BUILDER: '{{.BUILDER}}'
+          KORA_DIR: '{{.KORA_DIR}}'
+          REMOTE_DIR: '{{.REMOTE_DIR}}'
+          STAGE: '{{.STAGE}}'
+          SHELL_ATTR: '.#deploy'
+          # KORA_DIR rides along because the builder invokes a fresh `task`
+          # inside the dev shell, which inherits no vars from this one.
+          RPM_TARGET: '{{if eq .BUILDER "device"}}dist:rpm:kora KORA_DIR={{.KORA_DIR}}{{else}}dist:rpm{{end}}'
+      # A profile refuses a name it already holds and there is no replace, so
+      # the previous deploy goes first.
+      - |
+        ssh {{.HOST}} 'nix profile remove {{.NAME}} >/dev/null 2>&1 || true
+          nix profile add --impure --file {{.REMOTE_DIR}}/dev.nix {{.NAME}}'
+      # comm truncates to 15 chars - exactly `cosmic-settings`, another binary -
+      # so confirm against /proc/<pid>/exe before signalling anything.
+      - |
+        case "{{.RESTART}}" in
+          true|yes)
+            echo "Killing the daemon - cosmic-session does not start a replacement."
+            ssh {{.HOST}} 'for p in $(pgrep -x "$(printf %.15s {{.NAME}})" 2>/dev/null); do
+              case "$(readlink -f /proc/$p/exe)" in */{{.NAME}}) kill "$p" ;; esac
+            done' ;;
+          *)
+            echo "Not restarting. Log out and back in on {{.HOST}} to pick it up." ;;
+        esac
+      - |
+        echo "Done. {{.NAME}} is in {{.HOST}}'s user profile."
+        echo "cosmic-session resolves it by name and ~/.nix-profile/bin outranks"
+        echo "the system closure, so the next session starts this build."
+        echo "Undo it with 'nix profile remove {{.NAME}}' on the device."
+        case "{{.BUILDER}}" in
+          device) ;;
+          *) echo "Note: only BUILDER=device runs dist:rpm:kora, so this build's"
+             echo "/usr/share/{sounds/Pop,themes/adw-gtk3} will not resolve." ;;
+        esac
+
+  deploy:nix:rpm:
+    internal: true
+    desc: >-
+      Build the RPM and leave it, with the dev.nix wrapping it, in REMOTE_DIR on
+      HOST - where every BUILDER finishes, so the install step need not care.
+    vars:
+      GOTASK:
+        sh: command -v go-task || command -v task
+      RPM_TARGET: '{{.RPM_TARGET | default "dist:rpm"}}'
+      PROFILE: '{{.PROFILE | default "release"}}'
+      SHELL_ATTR: '{{.SHELL_ATTR | default ""}}'
+      # Home-relative, and its own directory: --delete into a tree you also work
+      # in would discard uncommitted work. target/ survives between deploys.
+      SRC_DIR: '{{.SRC_DIR | default (printf ".cache/kora-deploy/%s" .NAME)}}'
+    cmds:
+      - |
+        set -e
+        case "{{.BUILDER}}" in
+        device)
+          ssh {{.HOST}} 'mkdir -p {{.SRC_DIR}} {{.REMOTE_DIR}}'
+          # .git goes too: nix reads a checkout through git, so .gitignore is what
+          # keeps target/ out of the copy it takes into the store.
+          rsync -a --delete \
+            --exclude 'target/' --exclude '.cache/' --exclude 'dist/' --exclude 'result' \
+            ./ {{.HOST}}:{{.SRC_DIR}}/
+          # Quoted: what survives go-task's templating expands on the device.
+          ssh {{.HOST}} bash -s <<'REMOTE'
+        set -e
+        cd {{.SRC_DIR}}
+        # A flake's source is its tracked files; a new uncommitted one is not.
+        git add -AN . >/dev/null 2>&1 || true
+        nix develop {{.SHELL_ATTR}} --command task {{.RPM_TARGET}}
+        rpm=$(ls dist/{{.NAME}}-{{.VERSION}}-*.rpm | tail -n1)
+        cp "$rpm" {{.REMOTE_DIR}}/
+        # getFlake takes no `~`, so resolve it rather than write it.
+        sed -e "s|@KORA_DIR@|$(cd {{.KORA_DIR}} && pwd)|g" \
+            -e "s|@SRC@|{{.REMOTE_DIR}}/$(basename "$rpm")|g" \
+            -e "s|@NAME@|{{.NAME}}|g" \
+            pkg/nix/dev-package.nix.in > {{.REMOTE_DIR}}/dev.nix
+        REMOTE
+          ;;
+        nix|container|host)
+          case "{{.BUILDER}}" in
+            nix)
+              nix develop {{.SHELL_ATTR}} --command task {{.RPM_TARGET}} ;;
+            container)
+              {{.GOTASK}} docker:run TARGET={{.RPM_TARGET}} ARCH={{.ARCH}} TARGET_ARCH={{.TARGET_ARCH}} ;;
+            host)
+              {{.GOTASK}} {{.RPM_TARGET}} ;;
+          esac
+          # ld.so rejects a too-new glibc symbol version at exec and no patching
+          # fixes it. Only the builders that run here can get this wrong.
+          bin=target/{{.TARGET_ARCH}}/{{.PROFILE}}/{{.NAME}}
+          need=$(objdump -T "$bin" | grep -o 'GLIBC_[0-9.]*' | sort -V | tail -n1)
+          have=GLIBC_$(ssh {{.HOST}} 'ldd --version | head -n1 | sed "s/.* //"')
+          if [ "$(printf '%s\n%s\n' "$need" "$have" | sort -V | tail -n1)" != "$have" ]; then
+            echo "error: this build needs $need, {{.HOST}} provides $have. Wants:" >&2
+            objdump -T "$bin" | grep -F "($need)" >&2
+            echo "Drop BUILDER: the default builds on {{.HOST}} itself." >&2
+            exit 1
+          fi
+          echo "glibc: this build needs $need, {{.HOST}} has $have"
+
+          rm -rf {{.STAGE}}
+          mkdir -p {{.STAGE}}
+          rpm=$(ls dist/{{.NAME}}-{{.VERSION}}-*.{{.ARCH}}.rpm | tail -n1)
+          cp "$rpm" {{.STAGE}}/
+          kora=$(ssh {{.HOST}} 'cd {{.KORA_DIR}} && pwd')
+          sed -e "s|@KORA_DIR@|$kora|g" \
+              -e "s|@SRC@|{{.REMOTE_DIR}}/$(basename "$rpm")|g" \
+              -e "s|@NAME@|{{.NAME}}|g" \
+              pkg/nix/dev-package.nix.in > {{.STAGE}}/dev.nix
+          ssh {{.HOST}} 'mkdir -p {{.REMOTE_DIR}}'
+          # --delete so an older deploy's RPM does not sit there being confusing;
+          # nix has already copied the one it used into the store.
+          rsync -a --delete {{.STAGE}}/ {{.HOST}}:{{.REMOTE_DIR}}/
+          ;;
+        *)
+          echo "error: unknown BUILDER '{{.BUILDER}}'; use device, nix, container or host" >&2
+          exit 1 ;;
+        esac
+
+  nix:run:
+    desc: Run a task in the native Nix development shell
+    summary: |
+      Run a task inside the shell `flake.nix` describes, without entering it:
+
+        go-task nix:run TARGET=build:debug
+        go-task nix:run TARGET=test:all
+
+      Uses `.#deploy`, the same shell `deploy:nix` packages in, rather than
+      `.#default`: this flake's lock is from 2023-12, so the crane/fenix shell
+      resolves a toolchain years behind rust-toolchain.toml.
+    aliases:
+      - in-nix
+    preconditions:
+      - sh: which nix
+        msg: "Prerequisite utility 'nix' is not installed"
+    requires:
+      vars:
+        - TARGET
+    cmds:
+      # The inner `task` re-derives everything, where there is a compiler to ask.
+      - nix develop .#deploy --command task {{.TARGET}}
+
   docker:build:
     desc: Build the container image used for the `docker:run` target
     preconditions:
@@ -219,6 +448,12 @@ tasks:
         sh: pwd
       SSH_KEY:
         sh: echo "${SSH_KEY}"
+      # Rootless podman maps --user onto a subuid that cannot read the mounted
+      # checkout, and SELinux denies the labels. Real Docker needs neither.
+      PODMAN_OPTS:
+        sh: >-
+          docker --version 2>/dev/null | grep -qi podman &&
+          echo "--userns=keep-id --security-opt label=disable" || true
     requires:
       vars:
         - TARGET
@@ -237,7 +472,7 @@ tasks:
           cp ~/.ssh/* .cache/.ssh
         {{ end }}
       - |
-        docker run --rm \
+        docker run --rm {{.PODMAN_OPTS}} \
           -v "{{.PWD}}:{{.PWD}}" \
           -v "{{.PWD}}/.cache/home:/home/build" \
           -v "{{.PWD}}/.cache/var/lib/rpm:/var/lib/rpm" \

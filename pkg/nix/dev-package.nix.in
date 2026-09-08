@@ -1,0 +1,43 @@
+# Substituted by `go-task deploy:nix` and evaluated on the device.
+#
+# Unpacks the locally built RPM and autoPatchelfs it, so a dev build lands in
+# seconds instead of compiling on the device. A missing library fails the build
+# by name rather than when the daemon tries to start.
+let
+  kora = builtins.getFlake "path:@KORA_DIR@";
+  system = builtins.currentSystem;
+  pkgs = kora.inputs.nixpkgs.legacyPackages.${system};
+in
+{
+  @NAME@ = pkgs.stdenv.mkDerivation {
+    pname = "@NAME@";
+    version = "dev";
+    src = @SRC@;
+
+    unpackCmd = "${pkgs.rpm}/bin/rpm2cpio $curSrc | ${pkgs.cpio}/bin/cpio -idmv";
+    sourceRoot = ".";
+
+    nativeBuildInputs = [ pkgs.autoPatchelfHook ];
+
+    buildInputs = with pkgs; [
+      libinput
+      libpulseaudio
+      openssl
+      pipewire
+      systemd
+      libxkbcommon
+      wayland
+      libdrm
+      wireplumber
+      # A prebuilt binary needs these named; a source build inherits them.
+      stdenv.cc.cc.lib
+    ];
+
+    installPhase = ''
+      runHook preInstall
+      mkdir -p $out
+      cp -r usr/. $out/
+      runHook postInstall
+    '';
+  };
+}
