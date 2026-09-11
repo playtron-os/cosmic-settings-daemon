@@ -1,3 +1,17 @@
+# [1.6.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.5.0...v1.6.0) (2026-09-11)
+
+
+### Bug Fixes
+
+* drop dist:rpm:kora, and match the profile element by regex ([73a55a7](https://github.com/playtron-os/cosmic-settings-daemon/commit/73a55a710ce7e65f52ce943f658edb1252f9d4e8))
+* resolve sound and GTK themes through XDG data dirs, not /usr/share ([a57d2e7](https://github.com/playtron-os/cosmic-settings-daemon/commit/a57d2e7b89c13062c0941c7d0e0736805f252f5d))
+
+
+### Features
+
+* add deploy:nix for remote Kora hosts ([ea4cd11](https://github.com/playtron-os/cosmic-settings-daemon/commit/ea4cd1104eee3095da680d3c1419c3680131e347))
+* add NextRealm and PreviousRealm shortcut actions ([acd37cc](https://github.com/playtron-os/cosmic-settings-daemon/commit/acd37ccd2d45765a2f9de7432aa706f40e437046))
+
 # [1.5.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.4.1...v1.5.0) (2026-08-14)
 
 
