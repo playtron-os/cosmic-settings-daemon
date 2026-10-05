@@ -146,6 +146,9 @@ pub enum Action {
     /// Toggle between tiling and floating window states for the active window
     ToggleWindowFloating,
 
+    /// Open or close the active window's command palette
+    WindowCommands,
+
     /// Change focus to the given workspace ID
     Workspace(u8),
 
@@ -293,5 +296,17 @@ impl std::ops::Not for Orientation {
             Orientation::Horizontal => Orientation::Vertical,
             Orientation::Vertical => Orientation::Horizontal,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+
+    #[test]
+    fn window_commands_round_trips_through_ron() {
+        let action: Action = ron::from_str("WindowCommands").unwrap();
+        assert_eq!(action, Action::WindowCommands);
+        assert_eq!(ron::to_string(&action).unwrap(), "WindowCommands");
     }
 }
