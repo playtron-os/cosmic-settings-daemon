@@ -18,6 +18,9 @@ pub enum Action {
     /// Change focus to the window or workspace in the given direction
     Focus(FocusDirection),
 
+    /// Move keyboard focus into the active window's Halo
+    FocusHalo,
+
     /// Change focus to the last workspace
     LastWorkspace,
 
@@ -43,6 +46,9 @@ pub enum Action {
 
     /// Move a window in the given direction
     Move(Direction),
+
+    /// Choose a desktop to move the active window to, and follow it there
+    MoveToDesktop,
 
     /// Move a window to the last workspace
     MoveToLastWorkspace,
@@ -145,6 +151,9 @@ pub enum Action {
 
     /// Toggle between tiling and floating window states for the active window
     ToggleWindowFloating,
+
+    /// Open or close the active window's command palette
+    WindowCommands,
 
     /// Change focus to the given workspace ID
     Workspace(u8),
@@ -292,6 +301,29 @@ impl std::ops::Not for Orientation {
         match self {
             Orientation::Horizontal => Orientation::Vertical,
             Orientation::Vertical => Orientation::Horizontal,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Action;
+
+    #[test]
+    fn window_commands_round_trips_through_ron() {
+        let action: Action = ron::from_str("WindowCommands").unwrap();
+        assert_eq!(action, Action::WindowCommands);
+        assert_eq!(ron::to_string(&action).unwrap(), "WindowCommands");
+    }
+
+    #[test]
+    fn halo_actions_round_trip_through_ron() {
+        for (text, action) in [
+            ("FocusHalo", Action::FocusHalo),
+            ("MoveToDesktop", Action::MoveToDesktop),
+        ] {
+            assert_eq!(ron::from_str::<Action>(text).unwrap(), action);
+            assert_eq!(ron::to_string(&action).unwrap(), text);
         }
     }
 }
