@@ -1,3 +1,11 @@
+# [1.7.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.6.0...v1.7.0) (2026-10-06)
+
+
+### Features
+
+* **shortcuts:** add the FocusHalo and MoveToDesktop actions ([43b0c06](https://github.com/playtron-os/cosmic-settings-daemon/commit/43b0c069764ead33fc9a8c49c65b08b7fe8ffe28))
+* **shortcuts:** add the WindowCommands action ([841b714](https://github.com/playtron-os/cosmic-settings-daemon/commit/841b7148c9e2f7a29d0b322223a47f254a60cf13))
+
 # [1.6.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.5.0...v1.6.0) (2026-09-11)
 
 
