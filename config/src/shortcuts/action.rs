@@ -18,6 +18,9 @@ pub enum Action {
     /// Change focus to the window or workspace in the given direction
     Focus(FocusDirection),
 
+    /// Move keyboard focus into the active window's Halo
+    FocusHalo,
+
     /// Change focus to the last workspace
     LastWorkspace,
 
@@ -43,6 +46,9 @@ pub enum Action {
 
     /// Move a window in the given direction
     Move(Direction),
+
+    /// Choose a desktop to move the active window to, and follow it there
+    MoveToDesktop,
 
     /// Move a window to the last workspace
     MoveToLastWorkspace,
@@ -308,5 +314,16 @@ mod tests {
         let action: Action = ron::from_str("WindowCommands").unwrap();
         assert_eq!(action, Action::WindowCommands);
         assert_eq!(ron::to_string(&action).unwrap(), "WindowCommands");
+    }
+
+    #[test]
+    fn halo_actions_round_trip_through_ron() {
+        for (text, action) in [
+            ("FocusHalo", Action::FocusHalo),
+            ("MoveToDesktop", Action::MoveToDesktop),
+        ] {
+            assert_eq!(ron::from_str::<Action>(text).unwrap(), action);
+            assert_eq!(ron::to_string(&action).unwrap(), text);
+        }
     }
 }
