@@ -13,6 +13,7 @@ use cosmic_config::{ConfigGet, ConfigSet, CosmicConfigEntry};
 use cosmic_theme::{Theme, ThemeMode};
 
 use geonames::GeoPosition;
+use notify::Watcher;
 use sunrise::{Coordinates, SolarDay, SolarEvent};
 use tokio::time::Instant;
 use tokio_stream::StreamExt;
@@ -178,6 +179,7 @@ pub async fn watch_theme(
     }
 
     if tk.apply_theme_global {
+        crate::icetron::export();
         // Write the exports for both themes in case they have changed in the meantime
         let dark = match Theme::get_entry(&dark_helper) {
             Ok(t) => t,
@@ -203,14 +205,28 @@ pub async fn watch_theme(
 
         if !theme_mode.auto_switch {
             let t = if theme_mode.is_dark { dark } else { light };
-            if let Err(err) = t.apply_exports() {
+            if let Err(err) = apply_exports(&t) {
                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
             }
         }
 
         set_gnome_desktop_interface(theme_mode.is_dark);
-    } else if let Err(err) = Theme::reset_exports() {
+    } else if let Err(err) = reset_exports() {
         log::error!("Failed to reset the cosmic theme exports. {err:?}");
+    }
+
+    // `icetron-theme set` relinks the active theme here.
+    let (icetron_tx, mut icetron_rx) = tokio::sync::mpsc::unbounded_channel();
+    let mut icetron_watcher =
+        notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            if res.is_ok_and(|event| !matches!(event.kind, notify::EventKind::Access(_))) {
+                let _ = icetron_tx.send(());
+            }
+        })?;
+    if let Some(dir) = crate::icetron::config_dir()
+        && let Err(err) = icetron_watcher.watch(&dir, notify::RecursiveMode::NonRecursive)
+    {
+        log::debug!("Not watching {}: {err}", dir.display());
     }
 
     // TODO allow preference for config file instead?
@@ -246,6 +262,17 @@ pub async fn watch_theme(
         tokio::select! {
             _ = theme_cancel_rx.recv() => {
                 return Ok(());
+            }
+
+            Some(()) = icetron_rx.recv() => {
+                // One change comes as several events.
+                while icetron_rx.try_recv().is_ok() {}
+                if tk.apply_theme_global {
+                    crate::icetron::export();
+                    if let Err(err) = apply_gtk(theme_mode.is_dark) {
+                        log::error!("Failed to apply the icetron theme to gtk. {err:?}");
+                    }
+                }
             }
 
             changes = theme_mode_rx.recv() => {
@@ -290,7 +317,7 @@ pub async fn watch_theme(
                                 }
                             };
 
-                            if let Err(err) = theme.apply_exports() {
+                            if let Err(err) = apply_exports(&theme) {
                                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
@@ -317,6 +344,7 @@ pub async fn watch_theme(
                         }
 
                         if tk.apply_theme_global {
+                            crate::icetron::export();
                             // Write the exports for both themes in case they have changed in the meantime
                             let dark = match Theme::get_entry(&dark_helper) {
                                 Ok(t) => t,
@@ -341,12 +369,12 @@ pub async fn watch_theme(
                             set_flatpak_overrides();
 
                             let t = if theme_mode.is_dark { dark } else { light };
-                            if let Err(err) = t.apply_exports() {
+                            if let Err(err) = apply_exports(&t) {
                                 log::error!("Failed to apply COSMIC theme exports. {err:?}");
                             }
 
                             set_gnome_desktop_interface(theme_mode.is_dark);
-                        } else if let Err(err) = Theme::reset_exports() {
+                        } else if let Err(err) = reset_exports() {
                             log::error!("Failed to reset the cosmic theme exports. {err:?}");
                         }
                     },
@@ -378,7 +406,7 @@ pub async fn watch_theme(
                                 },
                             };
                             if theme_mode.is_dark == is_dark
-                                && let Err(err) = t.apply_exports() {
+                                && let Err(err) = apply_exports(&t) {
                                     log::error!("Failed to apply COSMIC theme exports. {err:?}");
                                 }
 
@@ -416,7 +444,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = theme.apply_exports() {
+                    if let Err(err) = apply_exports(&theme) {
                         log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
@@ -479,7 +507,7 @@ pub async fn watch_theme(
                             t
                         }
                     };
-                    if let Err(err) = theme.apply_exports() {
+                    if let Err(err) = apply_exports(&theme) {
                         log::error!("Failed to apply COSMIC theme exports. {err:?}");
                     }
 
@@ -546,7 +574,7 @@ pub async fn watch_theme(
                                 t
                             }
                         };
-                        if let Err(err) = Theme::apply_gtk(theme.is_dark) {
+                        if let Err(err) = apply_gtk(theme.is_dark) {
                             log::error!("Failed to apply the theme to gtk. {err:?}");
                         }
 
@@ -557,6 +585,34 @@ pub async fn watch_theme(
 
         }
     }
+}
+
+/// COSMIC's GTK and Qt exports for a theme, with GTK taken from the icetron
+/// theme when one is exported.
+fn apply_exports(theme: &Theme) -> anyhow::Result<()> {
+    let gtk = apply_gtk(theme.is_dark);
+    let qt = Theme::apply_qt(theme.is_dark);
+    let qt56ct = Theme::apply_qt56ct(theme.is_dark);
+    gtk?;
+    qt?;
+    qt56ct?;
+    Ok(())
+}
+
+fn apply_gtk(is_dark: bool) -> anyhow::Result<()> {
+    if let Some(css) = crate::icetron::css(is_dark) {
+        crate::icetron::apply(&css)?;
+        return Ok(());
+    }
+    crate::icetron::unlink()?;
+    Theme::apply_gtk(is_dark)?;
+    Ok(())
+}
+
+fn reset_exports() -> anyhow::Result<()> {
+    crate::icetron::reset()?;
+    Theme::reset_exports()?;
+    Ok(())
 }
 
 fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {

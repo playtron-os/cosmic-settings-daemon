@@ -1037,6 +1037,7 @@ dependencies = [
  "notify",
  "notify-rust",
  "reqwest",
+ "ron 0.12.2",
  "serde",
  "sunrise",
  "tokio",

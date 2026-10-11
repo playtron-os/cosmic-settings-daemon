@@ -31,6 +31,7 @@ use zbus::{Connection, MatchRule, MessageStream};
 mod battery;
 mod brightness_device;
 mod greeter;
+mod icetron;
 mod locale;
 mod location;
 mod logind_session;
