@@ -1,3 +1,10 @@
+# [1.8.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.7.0...v1.8.0) (2026-10-11)
+
+
+### Features
+
+* **theme:** give GTK apps the active icetron theme ([49b6ed9](https://github.com/playtron-os/cosmic-settings-daemon/commit/49b6ed90578090c0bfd376baeb5fb5deb19d1205))
+
 # [1.7.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.6.0...v1.7.0) (2026-10-06)
 
 
