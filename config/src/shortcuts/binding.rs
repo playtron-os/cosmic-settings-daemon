@@ -271,8 +271,9 @@ mod tests {
             ))
         );
 
-        // Must have a non-modifier key.
-        assert!(Binding::from_str("Super+Shift").is_err());
+        // Must have a non-modifier key, unless Super is held: Super alone opens the launcher.
+        assert!(Binding::from_str("Ctrl+Shift").is_err());
+        assert!(Binding::from_str("Super+Shift").is_ok());
 
         // Can't have multiple non-modifier keys.
         assert!(Binding::from_str("Super+Up+Down").is_err());
