@@ -1,3 +1,10 @@
+# [1.9.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.8.0...v1.9.0) (2026-10-20)
+
+
+### Features
+
+* **shortcuts:** add the SpeechToText action ([e683b5b](https://github.com/playtron-os/cosmic-settings-daemon/commit/e683b5b7b8e155f0d3293cf3d555df9b883d8a48))
+
 # [1.8.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.7.0...v1.8.0) (2026-10-11)
 
 
