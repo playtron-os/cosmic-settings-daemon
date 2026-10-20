@@ -134,6 +134,9 @@ pub enum Action {
     /// Execute a command with any given arguments
     Spawn(String),
 
+    /// Hold to dictate into the focused text field; releasing finishes
+    SpeechToText,
+
     /// Stop the compositor
     Terminate,
 
@@ -314,6 +317,13 @@ mod tests {
         let action: Action = ron::from_str("WindowCommands").unwrap();
         assert_eq!(action, Action::WindowCommands);
         assert_eq!(ron::to_string(&action).unwrap(), "WindowCommands");
+    }
+
+    #[test]
+    fn speech_to_text_round_trips_through_ron() {
+        let action: Action = ron::from_str("SpeechToText").unwrap();
+        assert_eq!(action, Action::SpeechToText);
+        assert_eq!(ron::to_string(&action).unwrap(), "SpeechToText");
     }
 
     #[test]
