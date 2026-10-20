@@ -6,6 +6,21 @@ use serde::{Deserialize, Serialize};
 /// An operation which may be bound to a keyboard shortcut.
 #[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum Action {
+    /// Capture every display to a file, one per display
+    CaptureScreen,
+
+    /// Capture every display to the clipboard
+    CaptureScreenClipboard,
+
+    /// Drag out an area, or pick a window, and capture it to a file
+    CaptureSelection,
+
+    /// Drag out an area, or pick a window, and capture it to the clipboard
+    CaptureSelectionClipboard,
+
+    /// Show the capture toolbar for screenshots and screen recordings
+    CaptureToolbar,
+
     /// Close the active window
     Close,
 
@@ -136,6 +151,9 @@ pub enum Action {
 
     /// Hold to dictate into the focused text field; releasing finishes
     SpeechToText,
+
+    /// Stop the running screen recording
+    StopRecording,
 
     /// Stop the compositor
     Terminate,
@@ -324,6 +342,24 @@ mod tests {
         let action: Action = ron::from_str("SpeechToText").unwrap();
         assert_eq!(action, Action::SpeechToText);
         assert_eq!(ron::to_string(&action).unwrap(), "SpeechToText");
+    }
+
+    #[test]
+    fn capture_actions_round_trip_through_ron() {
+        for (text, action) in [
+            ("CaptureScreen", Action::CaptureScreen),
+            ("CaptureScreenClipboard", Action::CaptureScreenClipboard),
+            ("CaptureSelection", Action::CaptureSelection),
+            (
+                "CaptureSelectionClipboard",
+                Action::CaptureSelectionClipboard,
+            ),
+            ("CaptureToolbar", Action::CaptureToolbar),
+            ("StopRecording", Action::StopRecording),
+        ] {
+            assert_eq!(ron::from_str::<Action>(text).unwrap(), action);
+            assert_eq!(ron::to_string(&action).unwrap(), text);
+        }
     }
 
     #[test]
