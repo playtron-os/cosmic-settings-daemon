@@ -1,3 +1,15 @@
+# [1.10.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.9.0...v1.10.0) (2026-10-21)
+
+
+### Bug Fixes
+
+* **theme:** set GTK keys with dconf when gsettings has no schema ([2c774e9](https://github.com/playtron-os/cosmic-settings-daemon/commit/2c774e9f72425dda2c00c90fc5bcc101e836b58d))
+
+
+### Features
+
+* **shortcuts:** add the screen capture actions ([6ae5c19](https://github.com/playtron-os/cosmic-settings-daemon/commit/6ae5c195d4b672bed594e93379721c21df0fed5e))
+
 # [1.9.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.8.0...v1.9.0) (2026-10-20)
 
 
