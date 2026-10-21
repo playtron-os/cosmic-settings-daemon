@@ -616,24 +616,17 @@ fn reset_exports() -> anyhow::Result<()> {
 }
 
 fn set_gnome_button_layout(show_maximize: bool, show_minimize: bool) {
-    tokio::spawn(async move {
-        let layout = match (show_maximize, show_minimize) {
-            (true, true) => ":minimize,maximize,close",
-            (true, false) => ":maximize,close",
-            (false, true) => ":minimize,close",
-            (false, false) => ":close",
-        };
-
-        let _res = tokio::process::Command::new("gsettings")
-            .args([
-                "set",
-                "org.gnome.desktop.wm.preferences",
-                "button-layout",
-                layout,
-            ])
-            .status()
-            .await;
-    });
+    let layout = match (show_maximize, show_minimize) {
+        (true, true) => ":minimize,maximize,close",
+        (true, false) => ":maximize,close",
+        (false, true) => ":minimize,close",
+        (false, false) => ":close",
+    };
+    tokio::spawn(set_gnome_key(
+        "org.gnome.desktop.wm.preferences",
+        "button-layout",
+        layout.to_string(),
+    ));
 }
 
 fn set_gnome_desktop_interface(is_dark: bool) {
@@ -643,42 +636,63 @@ fn set_gnome_desktop_interface(is_dark: bool) {
         ("prefer-light", "adw-gtk3")
     };
 
-    tokio::spawn(async {
-        let _res = tokio::process::Command::new("gsettings")
-            .args([
-                "set",
-                "org.gnome.desktop.interface",
-                "color-scheme",
-                color_scheme,
-            ])
-            .status()
-            .await;
-    });
+    tokio::spawn(set_gnome_key(
+        INTERFACE,
+        "color-scheme",
+        color_scheme.to_string(),
+    ));
 
     // GTK themes are shared data; look through every XDG data directory instead
     // of assuming the FHS one exists.
     if crate::xdg::find(format!("themes/{adw_theme}")).is_some() {
-        tokio::spawn(async {
-            let _res = tokio::process::Command::new("gsettings")
-                .args(["set", "org.gnome.desktop.interface", "gtk-theme", adw_theme])
-                .status()
-                .await;
-        });
+        tokio::spawn(set_gnome_key(INTERFACE, "gtk-theme", adw_theme.to_string()));
     }
 }
 
 fn set_gnome_icon_theme(theme: String) {
-    tokio::spawn(async move {
-        let _res = tokio::process::Command::new("gsettings")
-            .args([
-                "set",
-                "org.gnome.desktop.interface",
-                "icon-theme",
-                theme.as_str(),
-            ])
-            .status()
-            .await;
-    });
+    tokio::spawn(set_gnome_key(INTERFACE, "icon-theme", theme));
+}
+
+const INTERFACE: &str = "org.gnome.desktop.interface";
+
+/// Set a GNOME desktop key where GTK reads it. `gsettings` needs the schema
+/// installed, and NixOS keeps none in the system profile, so fall back to
+/// `dconf`, which writes the key without one.
+async fn set_gnome_key(schema: &'static str, key: &'static str, value: String) {
+    if !set_gnome_key_with("gsettings", "dconf", schema, key, &value).await {
+        log::warn!("Failed to set {schema} {key} to {value}");
+    }
+}
+
+async fn set_gnome_key_with(
+    gsettings: &str,
+    dconf: &str,
+    schema: &str,
+    key: &str,
+    value: &str,
+) -> bool {
+    let set = tokio::process::Command::new(gsettings)
+        .args(["set", schema, key, value])
+        .output()
+        .await;
+    if set.is_ok_and(|out| out.status.success()) {
+        return true;
+    }
+    tokio::process::Command::new(dconf)
+        .args(["write", &dconf_path(schema, key), &gvariant_string(value)])
+        .status()
+        .await
+        .is_ok_and(|status| status.success())
+}
+
+/// The dconf path of a key in a GNOME schema with no path of its own.
+fn dconf_path(schema: &str, key: &str) -> String {
+    format!("/{}/{key}", schema.replace('.', "/"))
+}
+
+/// `value` as a GVariant string literal.
+fn gvariant_string(value: &str) -> String {
+    format!("'{}'", value.replace('\\', "\\\\").replace('\'', "\\'"))
 }
 
 fn set_flatpak_overrides() {
@@ -709,4 +723,69 @@ fn set_flatpak_overrides() {
                 .await;
         }
     });
+}
+
+#[cfg(test)]
+mod gnome_key_tests {
+    use super::*;
+
+    #[test]
+    fn a_key_lands_at_its_schema_path() {
+        assert_eq!(
+            dconf_path(INTERFACE, "gtk-theme"),
+            "/org/gnome/desktop/interface/gtk-theme"
+        );
+        assert_eq!(
+            dconf_path("org.gnome.desktop.wm.preferences", "button-layout"),
+            "/org/gnome/desktop/wm/preferences/button-layout"
+        );
+    }
+
+    /// A `gsettings` that fails as it does with no schemas, and a `dconf`
+    /// that records what it was asked to write.
+    #[test]
+    fn a_key_goes_to_dconf_when_gsettings_has_no_schema() {
+        let dir = std::env::temp_dir().join(format!("csd-gnome-key-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let script = |name: &str, body: &str| {
+            let path = dir.join(name);
+            std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+            let mut perms = std::fs::metadata(&path).unwrap().permissions();
+            std::os::unix::fs::PermissionsExt::set_mode(&mut perms, 0o755);
+            std::fs::set_permissions(&path, perms).unwrap();
+            path.to_string_lossy().into_owned()
+        };
+        let written = dir.join("written");
+        let gsettings = script("gsettings", "echo 'No schemas installed' >&2; exit 1");
+        let dconf = script(
+            "dconf",
+            &format!("printf '%s\\n' \"$@\" > {}", written.display()),
+        );
+
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap();
+        let done = runtime.block_on(set_gnome_key_with(
+            &gsettings,
+            &dconf,
+            INTERFACE,
+            "gtk-theme",
+            "adw-gtk3-dark",
+        ));
+        let args = std::fs::read_to_string(&written).unwrap();
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert!(done);
+        assert_eq!(
+            args,
+            "write\n/org/gnome/desktop/interface/gtk-theme\n'adw-gtk3-dark'\n"
+        );
+    }
+
+    #[test]
+    fn values_are_written_as_gvariant_strings() {
+        assert_eq!(gvariant_string("adw-gtk3-dark"), "'adw-gtk3-dark'");
+        assert_eq!(gvariant_string(r"it's a \ name"), r"'it\'s a \\ name'");
+    }
 }
