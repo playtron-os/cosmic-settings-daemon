@@ -1,3 +1,10 @@
+# [1.11.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.10.0...v1.11.0) (2026-10-23)
+
+
+### Features
+
+* **shortcuts:** read distribution overrides of system actions ([48c439e](https://github.com/playtron-os/cosmic-settings-daemon/commit/48c439e30d8a305b98d7baff467196b5af40a318))
+
 # [1.10.0](https://github.com/playtron-os/cosmic-settings-daemon/compare/v1.9.0...v1.10.0) (2026-10-21)
 
 
