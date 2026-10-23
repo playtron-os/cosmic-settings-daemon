@@ -16,11 +16,17 @@ use cosmic_config::cosmic_config_derive::CosmicConfigEntry;
 use cosmic_config::{ConfigGet, CosmicConfigEntry};
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
+use std::io;
 use xkbcommon::xkb;
 
 pub const ID: &str = "com.system76.CosmicSettings.Shortcuts";
 
 pub type SystemActions = BTreeMap<action::System, String>;
+
+/// System config key for a distribution's changes to the packaged `system_actions`.
+///
+/// No package installs it, so upgrading this package never replaces those commands.
+pub const SYSTEM_ACTIONS_OVERRIDE: &str = "system_actions_override";
 
 /// Gets a cosmic-config [Config] context.
 pub fn context() -> Result<cosmic_config::Config, cosmic_config::Error> {
@@ -60,14 +66,27 @@ pub fn system_actions(context: &cosmic_config::Config) -> SystemActions {
                 tracing::error!("failed to read system shortcuts config 'system_actions': {why:?}");
             }
         }
+
+        // Then the distribution's overrides, which are optional
+        match context.get::<SystemActionsImpl>(SYSTEM_ACTIONS_OVERRIDE) {
+            Ok(overrides) => config.extend(overrides.0),
+            Err(cosmic_config::Error::GetKey(_, why)) if why.kind() == io::ErrorKind::NotFound => {}
+            Err(why) => {
+                tracing::error!(
+                    "failed to read system shortcuts config '{SYSTEM_ACTIONS_OVERRIDE}': {why:?}"
+                );
+            }
+        }
     }
 
-    // Then override it with the user's config
-    match context.get::<SystemActionsImpl>("system_actions") {
+    // Then override it with the user's config. `get` would fall back to the
+    // packaged file when the user has none, undoing the distribution's overrides.
+    match context.get_local::<SystemActionsImpl>("system_actions") {
         Ok(user_config) => config.extend(user_config.0),
-        Err(why) => {
+        Err(why) if why.is_err() => {
             tracing::error!("failed to read local shortcuts config 'system_actions': {why:?}");
         }
+        Err(_) => {}
     }
 
     config
